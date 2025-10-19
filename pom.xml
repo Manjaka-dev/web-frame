@@ -21,7 +21,6 @@
       <version>3.8.1</version>
       <scope>test</scope>
     </dependency>
-    <!-- Rendre la dépendance servlet disponible à la compilation mais fournie par le container au runtime -->
     <dependency>
       <groupId>jakarta.servlet</groupId>
       <artifactId>jakarta.servlet-api</artifactId>
