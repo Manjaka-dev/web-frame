@@ -160,14 +160,15 @@ public final class AnnotationScanner {
                 Router routerAnnotation = method.getAnnotation(Router.class);
                 if (routerAnnotation != null) {
                     String url = routerAnnotation.value();
-                    String view = routerAnnotation.view();
+                    String annotationView = routerAnnotation.view();
 
-                    // Si la vue n'est pas spécifiée, utiliser le nom de la méthode
-                    if (view == null || view.trim().isEmpty()) {
-                        view = method.getName();
-                    }
+                    // La vue sera déterminée par l'exécution de la méthode
+                    // Pour l'instant, on utilise la vue de l'annotation ou le nom de la méthode comme fallback
+                    String fallbackView = (annotationView != null && !annotationView.trim().isEmpty())
+                        ? annotationView
+                        : method.getName();
 
-                    ModelView modelView = new ModelView(url, method, view, controllerClass);
+                    ModelView modelView = new ModelView(url, method, fallbackView, controllerClass);
                     routes.add(modelView);
                 }
             }

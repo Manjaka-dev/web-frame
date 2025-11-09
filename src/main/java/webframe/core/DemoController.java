@@ -6,25 +6,35 @@ import webframe.core.annotation.Router;
 @Controller
 public class DemoController {
 
-    @Router(value = "/demo", view = "demo_page")
+    @Router("/demo")
     public String demo() {
-        return "✅ Page de démonstration - Le framework fonctionne parfaitement !";
+        return "demo_page";  // Nom de la vue
     }
 
     @Router("/api/status")
     public String status() {
-        return "✅ API Status: OPÉRATIONNEL\nFramework Web-Frame actif\nScanner d'annotations fonctionnel";
+        return "status_view";  // Nom de la vue
     }
 
-    @Router(value = "/test", view = "test_page")
+    @Router("/test")
     public String test() {
-        return "🧪 Test réussi !\nCette méthode a été invoquée automatiquement par le framework.";
+        return "test_result_view";  // Nom de la vue
+    }
+
+    @Router("/products")
+    public String products() {
+        return "product_list_view";  // Nom de la vue
+    }
+
+    @Router("/about")
+    public String about() {
+        return "about_page_view";  // Nom de la vue
     }
 
     @Router("/error-test")
     public Integer errorTest() {
         // Cette méthode retourne un Integer au lieu d'un String
-        // Elle devrait déclencher une exception
+        // Elle devrait générer une erreur lors du chargement du contexte
         return 42;
     }
 }
