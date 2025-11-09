@@ -16,6 +16,7 @@ Le `AnnotationScanner` peut :
 
 ### Méthodes disponibles
 
+#### Scanner des contrôleurs
 ```java
 // Scanner tout le classpath automatiquement
 List<Class<?>> controllers = AnnotationScanner.findControllerClasses();
@@ -25,6 +26,18 @@ List<Class<?>> controllers = AnnotationScanner.findControllerClasses("com.monapp
 
 // Méthodes héritées pour compatibilité
 List<String> controllerNames = AnnotationScanner.findClassesWithController("com.monapp");
+```
+
+#### **NOUVEAU : Scanner des routes @Router**
+```java
+// Scanner toutes les routes automatiquement
+List<ModelView> routes = AnnotationScanner.findAllRoutes();
+
+// Scanner les routes d'un package spécifique
+List<ModelView> routes = AnnotationScanner.findAllRoutes("com.monapp.controllers");
+
+// Scanner les routes dans une liste de contrôleurs
+List<ModelView> routes = AnnotationScanner.findRouterMethods(controllerClasses);
 ```
 
 ## Utilisation
@@ -45,22 +58,30 @@ Ajoutez la dépendance dans votre projet :
 </dependency>
 ```
 
-### 2. Créer des contrôleurs
+### 2. Créer des contrôleurs avec routes
 
 ```java
 package com.monapp.controllers;
 
 import webframe.core.annotation.Controller;
+import webframe.core.annotation.Router;
 
 @Controller
 public class MonController {
     
+    @Router(value = "/bonjour", view = "greeting")
     public String bonjour() {
         return "Bonjour depuis MonController !";
     }
     
+    @Router("/api/goodbye")
     public String auRevoir() {
         return "Au revoir !";
+    }
+    
+    // Méthode sans @Router - ne sera pas détectée comme route
+    public String helper() {
+        return "Méthode utilitaire";
     }
 }
 ```
@@ -76,6 +97,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import webframe.core.util.AnnotationScanner;
+import webframe.core.tools.ModelView;
 
 import java.io.IOException;
 import java.util.List;
@@ -90,9 +112,19 @@ public class MonDispatcherServlet extends HttpServlet {
         // Scanner automatiquement tous les contrôleurs du projet
         controllers = AnnotationScanner.findControllerClasses();
         
+        // Scanner automatiquement toutes les routes
+        List<ModelView> routes = AnnotationScanner.findAllRoutes();
+        
         System.out.println("Contrôleurs détectés :");
         for (Class<?> controller : controllers) {
             System.out.println("- " + controller.getName());
+        }
+        
+        System.out.println("Routes détectées :");
+        for (ModelView route : routes) {
+            System.out.println("- " + route.getUrl() + " -> " + 
+                             route.getController().getSimpleName() + "." + 
+                             route.getMethod().getName() + " (vue: " + route.getView() + ")");
         }
     }
     

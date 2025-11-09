@@ -1,9 +1,12 @@
 package webframe.core.util;
 
 import webframe.core.annotation.Controller;
+import webframe.core.annotation.Router;
+import webframe.core.tools.ModelView;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.JarURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -131,6 +134,65 @@ public final class AnnotationScanner {
 
         Collections.sort(annotated);
         return annotated;
+    }
+
+    /**
+     * Scanne les méthodes annotées avec @Router dans une liste de classes de contrôleurs.
+     * @param controllerClasses liste des classes de contrôleurs à scanner
+     * @return liste des ModelView représentant les routes trouvées
+     */
+    public static List<ModelView> findRouterMethods(List<Class<?>> controllerClasses) {
+        List<ModelView> routes = new ArrayList<>();
+
+        if (controllerClasses == null) {
+            return routes;
+        }
+
+        for (Class<?> controllerClass : controllerClasses) {
+            // Vérifier que c'est bien un contrôleur
+            if (controllerClass.getAnnotation(Controller.class) == null) {
+                continue;
+            }
+
+            // Scanner toutes les méthodes de la classe
+            Method[] methods = controllerClass.getDeclaredMethods();
+            for (Method method : methods) {
+                Router routerAnnotation = method.getAnnotation(Router.class);
+                if (routerAnnotation != null) {
+                    String url = routerAnnotation.value();
+                    String view = routerAnnotation.view();
+
+                    // Si la vue n'est pas spécifiée, utiliser le nom de la méthode
+                    if (view == null || view.trim().isEmpty()) {
+                        view = method.getName();
+                    }
+
+                    ModelView modelView = new ModelView(url, method, view, controllerClass);
+                    routes.add(modelView);
+                }
+            }
+        }
+
+        return routes;
+    }
+
+    /**
+     * Scanne automatiquement tous les contrôleurs et leurs routes @Router.
+     * @return liste des ModelView représentant toutes les routes trouvées
+     */
+    public static List<ModelView> findAllRoutes() {
+        List<Class<?>> controllers = findControllerClasses();
+        return findRouterMethods(controllers);
+    }
+
+    /**
+     * Scanne les contrôleurs d'un package spécifique et leurs routes @Router.
+     * @param basePackage package de base à scanner
+     * @return liste des ModelView représentant les routes trouvées dans ce package
+     */
+    public static List<ModelView> findAllRoutes(String basePackage) {
+        List<Class<?>> controllers = findControllerClasses(basePackage);
+        return findRouterMethods(controllers);
     }
 
     /**

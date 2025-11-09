@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/src/main/java/webframe/core/tools/modelView.java">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/java/webframe/core/tools/modelView.java" />
+              <option name="originalContent" value="package webframe.core.tools;&#10;&#10;import java.lang.reflect.Method;&#10;&#10;public class modelView {&#10;&#10;    private String url;&#10;    private Method method;&#10;    private String view;&#10;    private Class&lt;?&gt; controller;&#10;}&#10;" />
+              <option name="updatedContent" value="package webframe.core.tools;&#10;&#10;import java.lang.reflect.Method;&#10;&#10;/**&#10; * Représente une route associant une URL, une méthode de contrôleur et une vue.&#10; */&#10;public class ModelView {&#10;&#10;    private String url;&#10;    private Method method;&#10;    private String view;&#10;    private Class&lt;?&gt; controller;&#10;    &#10;    public ModelView() {}&#10;    &#10;    public ModelView(String url, Method method, String view, Class&lt;?&gt; controller) {&#10;        this.url = url;&#10;        this.method = method;&#10;        this.view = view;&#10;        this.controller = controller;&#10;    }&#10;    &#10;    // Getters&#10;    public String getUrl() {&#10;        return url;&#10;    }&#10;    &#10;    public Method getMethod() {&#10;        return method;&#10;    }&#10;    &#10;    public String getView() {&#10;        return view;&#10;    }&#10;    &#10;    public Class&lt;?&gt; getController() {&#10;        return controller;&#10;    }&#10;    &#10;    // Setters&#10;    public void setUrl(String url) {&#10;        this.url = url;&#10;    }&#10;    &#10;    public void setMethod(Method method) {&#10;        this.method = method;&#10;    }&#10;    &#10;    public void setView(String view) {&#10;        this.view = view;&#10;    }&#10;    &#10;    public void setController(Class&lt;?&gt; controller) {&#10;        this.controller = controller;&#10;    }&#10;    &#10;    @Override&#10;    public String toString() {&#10;        return String.format(&quot;ModelView{url='%s', method='%s', view='%s', controller='%s'}&quot;, &#10;                           url, &#10;                           method != null ? method.getName() : &quot;null&quot;,&#10;                           view,&#10;                           controller != null ? controller.getSimpleName() : &quot;null&quot;);&#10;    }&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
