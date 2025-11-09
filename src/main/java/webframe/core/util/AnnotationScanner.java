@@ -27,48 +27,85 @@ public final class AnnotationScanner {
     private AnnotationScanner() {}
 
     /**
+     * Recherche toutes les classes du projet qui sont annotées avec {@link Controller}.
+     * Scanne automatiquement tout le classpath.
+     * @return la liste des classes annotées avec @Controller
+     */
+    public static List<Class<?>> findControllerClasses() {
+        return findControllerClasses(null);
+    }
+
+    /**
      * Recherche toutes les classes du classpath sous le package fourni qui sont annotées avec {@link Controller}.
-     * @param basePackage package de base à scanner (ex: "webframe")
+     * @param basePackage package de base à scanner (ex: "webframe"), null pour scanner tout le classpath
+     * @return la liste des classes annotées avec @Controller
+     */
+    public static List<Class<?>> findControllerClasses(String basePackage) {
+        List<String> classNames = findClassesWithController(basePackage);
+        List<Class<?>> classes = new ArrayList<>();
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+
+        for (String className : classNames) {
+            try {
+                Class<?> clazz = Class.forName(className, false, cl);
+                if (clazz.getAnnotation(Controller.class) != null) {
+                    classes.add(clazz);
+                }
+            } catch (Throwable ignored) {
+                // Classe non chargeable: on ignore
+            }
+        }
+
+        return classes;
+    }
+
+    /**
+     * Recherche toutes les classes du classpath sous le package fourni qui sont annotées avec {@link Controller}.
+     * @param basePackage package de base à scanner (ex: "webframe"), null pour scanner tout le classpath
      * @return la liste des noms de classes pleinement qualifiés trouvés
      */
     public static List<String> findClassesWithController(String basePackage) {
-        if (basePackage == null || basePackage.trim().isEmpty()) {
-            return Collections.emptyList();
-        }
-
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        String packagePath = basePackage.replace('.', '/');
         Set<String> classNames = new HashSet<>();
 
-        try {
-            // 1) Ressources de type dossier sur le classpath
-            Enumeration<URL> resources = cl.getResources(packagePath);
-            while (resources.hasMoreElements()) {
-                URL url = resources.nextElement();
-                String protocol = url.getProtocol();
-                if ("file".equals(protocol)) {
-                    scanDirectoryURL(url, basePackage, classNames);
-                } else if ("jar".equals(protocol)) {
-                    scanJarURL(url, packagePath, classNames);
-                }
-            }
+        // Si basePackage est null ou vide, on scanne tout le classpath
+        boolean scanAll = (basePackage == null || basePackage.trim().isEmpty());
+        String packagePath = scanAll ? "" : basePackage.replace('.', '/');
 
-            // 2) Parcours complémentaire du classpath (dossiers et jars) pour robustesse
-            String cp = System.getProperty("java.class.path");
-            if (cp != null) {
-                String[] entries = cp.split(java.io.File.pathSeparator);
-                for (String entry : entries) {
-                    File file = new File(entry);
-                    if (file.isDirectory()) {
-                        File baseDir = new File(file, packagePath);
-                        if (baseDir.isDirectory()) {
-                            scanDirectory(baseDir, basePackage, classNames);
-                        }
-                    } else if (entry.endsWith(".jar") && file.isFile()) {
-                        try (JarFile jarFile = new JarFile(file)) {
-                            scanJarFile(jarFile, packagePath, classNames);
-                        } catch (IOException ignored) {
-                            // On ignore les jars illisibles
+        try {
+            if (scanAll) {
+                // Scan complet du classpath
+                scanFullClasspath(cl, classNames);
+            } else {
+                // 1) Ressources de type dossier sur le classpath
+                Enumeration<URL> resources = cl.getResources(packagePath);
+                while (resources.hasMoreElements()) {
+                    URL url = resources.nextElement();
+                    String protocol = url.getProtocol();
+                    if ("file".equals(protocol)) {
+                        scanDirectoryURL(url, basePackage, classNames);
+                    } else if ("jar".equals(protocol)) {
+                        scanJarURL(url, packagePath, classNames);
+                    }
+                }
+
+                // 2) Parcours complémentaire du classpath (dossiers et jars) pour robustesse
+                String cp = System.getProperty("java.class.path");
+                if (cp != null) {
+                    String[] entries = cp.split(java.io.File.pathSeparator);
+                    for (String entry : entries) {
+                        File file = new File(entry);
+                        if (file.isDirectory()) {
+                            File baseDir = new File(file, packagePath);
+                            if (baseDir.isDirectory()) {
+                                scanDirectory(baseDir, basePackage, classNames);
+                            }
+                        } else if (entry.endsWith(".jar") && file.isFile()) {
+                            try (JarFile jarFile = new JarFile(file)) {
+                                scanJarFile(jarFile, packagePath, classNames);
+                            } catch (IOException ignored) {
+                                // On ignore les jars illisibles
+                            }
                         }
                     }
                 }
@@ -94,6 +131,63 @@ public final class AnnotationScanner {
 
         Collections.sort(annotated);
         return annotated;
+    }
+
+    /**
+     * Scanne tout le classpath pour trouver toutes les classes.
+     */
+    private static void scanFullClasspath(ClassLoader cl, Set<String> classNames) {
+        // Parcours du classpath complet
+        String cp = System.getProperty("java.class.path");
+        if (cp != null) {
+            String[] entries = cp.split(java.io.File.pathSeparator);
+            for (String entry : entries) {
+                File file = new File(entry);
+                if (file.isDirectory()) {
+                    scanDirectoryRecursive(file, "", classNames);
+                } else if (entry.endsWith(".jar") && file.isFile()) {
+                    try (JarFile jarFile = new JarFile(file)) {
+                        scanJarFileComplete(jarFile, classNames);
+                    } catch (IOException ignored) {
+                        // On ignore les jars illisibles
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Scanne un dossier récursivement pour toutes les classes.
+     */
+    private static void scanDirectoryRecursive(File dir, String currentPackage, Set<String> classNames) {
+        File[] files = dir.listFiles();
+        if (files == null) return;
+
+        for (File file : files) {
+            if (file.isDirectory()) {
+                String nextPackage = currentPackage.isEmpty() ? file.getName() : currentPackage + "." + file.getName();
+                scanDirectoryRecursive(file, nextPackage, classNames);
+            } else if (file.getName().endsWith(".class") && !file.getName().contains("$")) {
+                String simple = file.getName().substring(0, file.getName().length() - 6); // enlever .class
+                String className = currentPackage.isEmpty() ? simple : currentPackage + "." + simple;
+                classNames.add(className);
+            }
+        }
+    }
+
+    /**
+     * Scanne un JAR complet pour toutes les classes.
+     */
+    private static void scanJarFileComplete(JarFile jarFile, Set<String> classNames) {
+        Enumeration<JarEntry> entries = jarFile.entries();
+        while (entries.hasMoreElements()) {
+            JarEntry entry = entries.nextElement();
+            String name = entry.getName();
+            if (name.endsWith(".class") && !name.contains("$") && !entry.isDirectory()) {
+                String className = name.replace('/', '.').substring(0, name.length() - 6);
+                classNames.add(className);
+            }
+        }
     }
 
     /**

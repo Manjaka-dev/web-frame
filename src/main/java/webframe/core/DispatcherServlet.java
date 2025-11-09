@@ -5,9 +5,11 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import webframe.core.util.AnnotationScanner;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.List;
 
 @WebServlet("/")
 public class DispatcherServlet extends HttpServlet {
@@ -23,12 +25,28 @@ public class DispatcherServlet extends HttpServlet {
         resp.setContentType("text/html;charset=UTF-8");
         resp.setStatus(HttpServletResponse.SC_OK);
 
+        // Scan des contrôleurs disponibles
+        List<Class<?>> controllerClasses = AnnotationScanner.findControllerClasses();
+
         try (PrintWriter out = resp.getWriter()) {
             out.println("<!doctype html>");
-            out.println("<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<title>URL demande</title>\n</head>");
+            out.println("<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<title>Web Frame Demo</title>\n</head>");
             out.println("<body>");
-            out.println("<h1>URL demandée</h1>");
+            out.println("<h1>Web Frame - Démonstration du Scanner</h1>");
+            out.println("<h2>URL demandée</h2>");
             out.println("<p>" + escapeHtml(fullUrl) + "</p>");
+
+            out.println("<h2>Contrôleurs détectés</h2>");
+            if (controllerClasses.isEmpty()) {
+                out.println("<p>Aucun contrôleur trouvé.</p>");
+            } else {
+                out.println("<ul>");
+                for (Class<?> controllerClass : controllerClasses) {
+                    out.println("<li>" + escapeHtml(controllerClass.getName()) + "</li>");
+                }
+                out.println("</ul>");
+            }
+
             out.println("</body>\n</html>");
         }
     }
