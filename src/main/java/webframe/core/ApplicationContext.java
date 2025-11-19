@@ -12,7 +12,7 @@ import java.util.Map;
  */
 public class ApplicationContext {
 
-    private Map<String, ModelView> routeMap;
+    final private Map<String, ModelView> routeMap;
     private static ApplicationContext instance;
 
     private ApplicationContext() {
@@ -51,8 +51,15 @@ public class ApplicationContext {
             Object controllerInstance = route.getController().getDeclaredConstructor().newInstance();
             Object result = route.getMethod().invoke(controllerInstance);
 
-            if (result instanceof String) {
-                return (String) result;
+            if (result instanceof ModelView) {
+                ModelView returned = (ModelView) result;
+                route.setView(returned.getView());
+                for (Map.Entry<String,Object> e : returned.getData().entrySet()) {
+                    route.addData(e.getKey(), e.getValue());
+                }
+                return route.getView();
+            } else if (result instanceof String) {
+                return result.toString();
             } else {
                 System.err.println("Attention: La méthode " + route.getMethod().getName() +
                                  " ne retourne pas un String. Vue par défaut utilisée.");
@@ -77,13 +84,5 @@ public class ApplicationContext {
      */
     public Map<String, ModelView> getAllRoutes() {
         return new HashMap<>(routeMap);
-    }
-
-    /**
-     * Recharge les routes (utile pour le développement)
-     */
-    public void reloadRoutes() {
-        routeMap.clear();
-        loadRoutes();
     }
 }
