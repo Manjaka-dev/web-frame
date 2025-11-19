@@ -1,6 +1,8 @@
 package webframe.core.tools;
 
 import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Représente une route associant une URL, une méthode de contrôleur et une vue.
@@ -11,6 +13,7 @@ public class ModelView {
     private Method method;
     private String view;
     private Class<?> controller;
+    final private Map<String, Object> data = new HashMap<>();
 
     public ModelView() {}
 
@@ -38,21 +41,8 @@ public class ModelView {
         return controller;
     }
 
-    // Setters
-    public void setUrl(String url) {
-        this.url = url;
-    }
-
-    public void setMethod(Method method) {
-        this.method = method;
-    }
-
     public void setView(String view) {
         this.view = view;
-    }
-
-    public void setController(Class<?> controller) {
-        this.controller = controller;
     }
 
     @Override
@@ -62,5 +52,13 @@ public class ModelView {
                            method != null ? method.getName() : "null",
                            view,
                            controller != null ? controller.getSimpleName() : "null");
+    }
+
+    public void addData(String key, Object value) {
+        data.put(key, value);
+    }
+
+    public Map<String, Object> getData() {
+        return data;
     }
 }

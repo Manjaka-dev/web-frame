@@ -1,6 +1,5 @@
 package webframe.core;
 
-import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -10,6 +9,7 @@ import webframe.core.tools.ModelView;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 
@@ -19,33 +19,33 @@ public class DispatcherServlet extends HttpServlet {
     private ApplicationContext appContext;
 
     @Override
-    public void init() throws ServletException {
+    public void init() {
         // Initialiser le contexte de l'application
         appContext = ApplicationContext.getInstance();
     }
 
     @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        // Construire l'URL demandée (sans query string pour le matching)
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String requestPath = req.getRequestURI();
-
-        // Préparer la réponse HTML
         resp.setContentType("text/html;charset=UTF-8");
 
         try (PrintWriter out = resp.getWriter()) {
-            // Chercher une route dans le contexte
             ModelView matchingRoute = appContext.findRoute(requestPath);
 
             if (matchingRoute != null) {
-                // Route trouvée - retourner la vue
-                resp.setStatus(HttpServletResponse.SC_OK);
-                showView(matchingRoute, out);
+                try {
+                    // Exécuter la méthode du contrôleur et récupérer un ModelView mis à jour
+                    ModelView executed = executeRouteMethod(matchingRoute);
+                    resp.setStatus(HttpServletResponse.SC_OK);
+                    showView(executed, out);
+                } catch (Exception e) {
+                    resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                    showError(out, e.toString());
+                }
             } else if ("/".equals(requestPath)) {
-                // Page d'accueil - afficher la démo
                 resp.setStatus(HttpServletResponse.SC_OK);
-                showDemoPage(requestPath, out);
+                showDemoPage(out);
             } else {
-                // Route non trouvée - 404
                 resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 show404Page(requestPath, out);
             }
@@ -53,7 +53,49 @@ public class DispatcherServlet extends HttpServlet {
     }
 
     /**
-     * Affiche la vue correspondante à une route
+     * Exécute la méthode du contrôleur et met à jour le ModelView retourné
+     */
+    private ModelView executeRouteMethod(ModelView route) throws Exception {
+        if (route == null) return route;
+
+        Method method = route.getMethod();
+        Class<?> controllerClass = route.getController();
+        if (method == null || controllerClass == null) return route;
+
+        Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
+        method.setAccessible(true);
+        Object result = method.invoke(controllerInstance);
+
+        if (result == null) {
+            return route;
+        }
+
+        // Si la méthode retourne un ModelView -> utiliser directement
+        if (result instanceof ModelView) {
+            return (ModelView) result;
+        }
+
+        // Si la méthode retourne un String -> nom de la vue
+        if (result instanceof String) {
+            route.setView((String) result);
+            return route;
+        }
+
+        // Si la méthode retourne une Map -> fusionner dans les data
+        if (result instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> returnedMap = (Map<String, Object>) result;
+            route.getData().putAll(returnedMap);
+            return route;
+        }
+
+        // Autres types -> stocker sous une clé générique "result"
+        route.getData().put("result", result);
+        return route;
+    }
+
+    /**
+     * Affiche la vue correspondante à une route (avec les données)
      */
     private void showView(ModelView route, PrintWriter out) {
         out.println("<!doctype html>");
@@ -69,12 +111,20 @@ public class DispatcherServlet extends HttpServlet {
         out.println("<p><strong>Vue retournée:</strong> <code>" + escapeHtml(route.getView()) + "</code></p>");
         out.println("</div>");
 
-        out.println("<div style='background-color:#f0f8ff; padding:15px; border-radius:5px; border-left:4px solid #007acc;'>");
-        out.println("<h3>💡 Comment ça fonctionne</h3>");
-        out.println("<p>1. L'URL <code>" + escapeHtml(route.getUrl()) + "</code> a été trouvée dans le contexte</p>");
-        out.println("<p>2. La méthode <code>" + escapeHtml(route.getMethod().getName()) + "()</code> a été exécutée</p>");
-        out.println("<p>3. Le retour de la méthode (<code>" + escapeHtml(route.getView()) + "</code>) est maintenant le nom de la vue</p>");
-        out.println("<p>4. Dans une vraie application, cette vue serait rendue par un moteur de template</p>");
+        // Afficher les données envoyées depuis le contrôleur
+        out.println("<div style='background-color:#fffde7; padding:15px; border-radius:5px; margin:10px 0;'>");
+        out.println("<h3>📦 Données (ModelView.data)</h3>");
+        if (route.getData() == null || route.getData().isEmpty()) {
+            out.println("<p>Aucune donnée envoyée par le contrôleur.</p>");
+        } else {
+            out.println("<ul>");
+            for (Map.Entry<String, Object> entry : route.getData().entrySet()) {
+                String key = escapeHtml(entry.getKey());
+                String value = escapeHtml(entry.getValue() != null ? entry.getValue().toString() : "null");
+                out.println("<li><strong>" + key + ":</strong> " + value + "</li>");
+            }
+            out.println("</ul>");
+        }
         out.println("</div>");
 
         out.println("<p style='margin-top:20px;'><a href='/' style='background-color:#007acc; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;'>← Retour à l'accueil</a></p>");
@@ -101,7 +151,6 @@ public class DispatcherServlet extends HttpServlet {
         out.println("<p>Voici les routes actuellement disponibles dans l'application :</p>");
         out.println("<ul>");
 
-        // Afficher les routes disponibles
         for (ModelView route : appContext.getAllRoutes().values()) {
             out.println("<li><a href='" + escapeHtml(route.getUrl()) + "'>" + escapeHtml(route.getUrl()) + "</a> → Vue: " + escapeHtml(route.getView()) + "</li>");
         }
@@ -119,11 +168,11 @@ public class DispatcherServlet extends HttpServlet {
     /**
      * Affiche une page d'erreur
      */
-    private void showError(PrintWriter out, String title, String message) {
+    private void showError(PrintWriter out, String message) {
         out.println("<!doctype html>");
         out.println("<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<title>Erreur - Web Frame</title>\n</head>");
         out.println("<body>");
-        out.println("<h1 style='color:red;'>❌ " + escapeHtml(title) + "</h1>");
+        out.println("<h1 style='color:red;'>❌ " + escapeHtml("Erreur d'invocation") + "</h1>");
         out.println("<div style='background-color:#ffe6e6; padding:15px; border-radius:5px; border-left:5px solid red;'>");
         out.println("<p><strong>Message d'erreur:</strong></p>");
         out.println("<pre>" + escapeHtml(message) + "</pre>");
@@ -135,7 +184,7 @@ public class DispatcherServlet extends HttpServlet {
     /**
      * Affiche la page de démonstration par défaut
      */
-    private void showDemoPage(String requestPath, PrintWriter out) {
+    private void showDemoPage(PrintWriter out) {
         // Obtenir les informations depuis le contexte
         Map<String, ModelView> allRoutes = appContext.getAllRoutes();
         List<Class<?>> controllerClasses = AnnotationScanner.findControllerClasses();
@@ -200,8 +249,6 @@ public class DispatcherServlet extends HttpServlet {
 
         out.println("</body>\n</html>");
     }
-
-
 
     // Méthode utilitaire minimale pour échapper les caractères HTML basiques
     private String escapeHtml(String s) {
