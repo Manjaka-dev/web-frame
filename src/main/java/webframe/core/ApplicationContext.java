@@ -2,6 +2,7 @@ package webframe.core;
 
 import webframe.core.tools.ModelView;
 import webframe.core.util.AnnotationScanner;
+import webframe.core.util.UrlPatternMatcher;
 
 import java.util.HashMap;
 import java.util.List;
@@ -31,7 +32,8 @@ public class ApplicationContext {
      * Charge toutes les routes du classpath
      */
     private void loadRoutes() {
-        List<ModelView> allRoutes = AnnotationScanner.findAllRoutes();
+        // Scanner spécifiquement le package webframe pour trouver les contrôleurs
+        List<ModelView> allRoutes = AnnotationScanner.findAllRoutes("webframe");
         for (ModelView route : allRoutes) {
             // Exécuter la méthode pour obtenir la vue réelle
             String actualView = executeMethodForView(route);
@@ -73,10 +75,38 @@ public class ApplicationContext {
     }
 
     /**
-     * Trouve une route correspondante à l'URL
+     * Trouve une route correspondante à l'URL.
+     * Supporte les patterns avec paramètres comme /url/{id}.
      */
     public ModelView findRoute(String url) {
-        return routeMap.get(url);
+        // D'abord, chercher une correspondance exacte
+        ModelView exactMatch = routeMap.get(url);
+        if (exactMatch != null) {
+            return exactMatch;
+        }
+
+        // Ensuite, chercher un pattern qui correspond
+        String matchingPattern = UrlPatternMatcher.findMatchingPattern(routeMap, url);
+        if (matchingPattern != null) {
+            ModelView route = routeMap.get(matchingPattern);
+            if (route != null) {
+                // Créer une copie du ModelView pour cette requête spécifique
+                ModelView specificRoute = new ModelView(url, route.getMethod(), route.getView(), route.getController());
+
+                // Copier les données existantes
+                specificRoute.getData().putAll(route.getData());
+
+                // Extraire et ajouter les paramètres d'URL (pour usage futur)
+                Map<String, String> urlParams = UrlPatternMatcher.extractParameters(url, matchingPattern);
+                for (Map.Entry<String, String> param : urlParams.entrySet()) {
+                    specificRoute.addData("urlParam_" + param.getKey(), param.getValue());
+                }
+
+                return specificRoute;
+            }
+        }
+
+        return null;
     }
 
     /**
