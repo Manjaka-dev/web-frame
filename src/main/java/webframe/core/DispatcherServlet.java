@@ -11,6 +11,7 @@ import webframe.core.tools.ModelView;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -72,8 +73,11 @@ public class DispatcherServlet extends HttpServlet {
         Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
         method.setAccessible(true);
 
-        // Résoudre les paramètres de la méthode à partir de la requête HTTP
-        Object[] args = ParameterResolver.resolveParameters(method, request);
+        // Extraire les paramètres d'URL depuis les données du ModelView
+        Map<String, String> urlParameters = extractUrlParametersFromRoute(route);
+
+        // Résoudre les paramètres de la méthode à partir de la requête HTTP et des paramètres d'URL
+        Object[] args = ParameterResolver.resolveParameters(method, request, urlParameters);
         Object result = method.invoke(controllerInstance, args);
 
         if (result == null) {
@@ -102,6 +106,29 @@ public class DispatcherServlet extends HttpServlet {
         // Autres types -> stocker sous une clé générique "result"
         route.getData().put("result", result);
         return route;
+    }
+
+    /**
+     * Extrait les paramètres d'URL depuis les données du ModelView.
+     * Les paramètres d'URL sont stockés avec le préfixe "urlParam_".
+     */
+    private Map<String, String> extractUrlParametersFromRoute(ModelView route) {
+        Map<String, String> urlParameters = new java.util.HashMap<>();
+
+        if (route.getData() != null) {
+            for (Map.Entry<String, Object> entry : route.getData().entrySet()) {
+                String key = entry.getKey();
+                if (key.startsWith("urlParam_")) {
+                    String paramName = key.substring("urlParam_".length());
+                    Object value = entry.getValue();
+                    if (value != null) {
+                        urlParameters.put(paramName, value.toString());
+                    }
+                }
+            }
+        }
+
+        return urlParameters;
     }
 
     /**
