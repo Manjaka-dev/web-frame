@@ -21,6 +21,19 @@ public class ParameterResolver {
      * @throws IllegalArgumentException si un paramètre requis est manquant ou si la conversion échoue
      */
     public static Object[] resolveParameters(Method method, HttpServletRequest request) {
+        return resolveParameters(method, request, null);
+    }
+
+    /**
+     * Résout les paramètres d'une méthode à partir d'une requête HTTP et de paramètres d'URL.
+     *
+     * @param method la méthode dont les paramètres doivent être résolus
+     * @param request la requête HTTP contenant les données
+     * @param urlParameters paramètres extraits de l'URL (ex: {id} -> "123"), peut être null
+     * @return un tableau d'objets représentant les arguments à passer à la méthode
+     * @throws IllegalArgumentException si un paramètre requis est manquant ou si la conversion échoue
+     */
+    public static Object[] resolveParameters(Method method, HttpServletRequest request, java.util.Map<String, String> urlParameters) {
         Parameter[] parameters = method.getParameters();
         Object[] args = new Object[parameters.length];
 
@@ -31,8 +44,13 @@ public class ParameterResolver {
             // Déterminer le nom du paramètre à rechercher dans la requête
             String paramName = getParameterName(param, annotation);
 
-            // Récupérer la valeur de la requête
-            String paramValue = request.getParameter(paramName);
+            // Récupérer la valeur: d'abord dans les paramètres d'URL, puis dans la requête HTTP
+            String paramValue = null;
+            if (urlParameters != null && urlParameters.containsKey(paramName)) {
+                paramValue = urlParameters.get(paramName);
+            } else {
+                paramValue = request.getParameter(paramName);
+            }
 
             // Traiter le paramètre selon l'annotation
             args[i] = processParameter(param, annotation, paramValue, paramName);
