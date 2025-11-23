@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import webframe.core.util.AnnotationScanner;
+import webframe.core.util.ParameterResolver;
 import webframe.core.tools.ModelView;
 
 import java.io.IOException;
@@ -35,7 +36,7 @@ public class DispatcherServlet extends HttpServlet {
             if (matchingRoute != null) {
                 try {
                     // Exécuter la méthode du contrôleur et récupérer un ModelView mis à jour
-                    ModelView executed = executeRouteMethod(matchingRoute);
+                    ModelView executed = executeRouteMethod(matchingRoute, req);
                     resp.setStatus(HttpServletResponse.SC_OK);
                     showView(executed, out);
                 } catch (Exception e) {
@@ -52,10 +53,16 @@ public class DispatcherServlet extends HttpServlet {
         }
     }
 
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        // Utiliser la même logique que GET pour traiter les formulaires
+        doGet(req, resp);
+    }
+
     /**
      * Exécute la méthode du contrôleur et met à jour le ModelView retourné
      */
-    private ModelView executeRouteMethod(ModelView route) throws Exception {
+    private ModelView executeRouteMethod(ModelView route, HttpServletRequest request) throws Exception {
         if (route == null) return route;
 
         Method method = route.getMethod();
@@ -64,7 +71,10 @@ public class DispatcherServlet extends HttpServlet {
 
         Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
         method.setAccessible(true);
-        Object result = method.invoke(controllerInstance);
+
+        // Résoudre les paramètres de la méthode à partir de la requête HTTP
+        Object[] args = ParameterResolver.resolveParameters(method, request);
+        Object result = method.invoke(controllerInstance, args);
 
         if (result == null) {
             return route;

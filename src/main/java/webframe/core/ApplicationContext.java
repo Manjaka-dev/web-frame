@@ -51,7 +51,16 @@ public class ApplicationContext {
     private String executeMethodForView(ModelView route) {
         try {
             Object controllerInstance = route.getController().getDeclaredConstructor().newInstance();
-            Object result = route.getMethod().invoke(controllerInstance);
+            java.lang.reflect.Method method = route.getMethod();
+
+            // Si la méthode a des paramètres, créer des valeurs par défaut pour l'initialisation
+            Object[] args = new Object[method.getParameterCount()];
+            for (int i = 0; i < args.length; i++) {
+                Class<?> paramType = method.getParameterTypes()[i];
+                args[i] = getDefaultValueForType(paramType);
+            }
+
+            Object result = method.invoke(controllerInstance, args);
 
             if (result instanceof ModelView) {
                 ModelView returned = (ModelView) result;
@@ -114,5 +123,20 @@ public class ApplicationContext {
      */
     public Map<String, ModelView> getAllRoutes() {
         return new HashMap<>(routeMap);
+    }
+
+    /**
+     * Retourne une valeur par défaut pour les types primitifs.
+     */
+    private static Object getDefaultValueForType(Class<?> type) {
+        if (type == int.class) return 0;
+        if (type == long.class) return 0L;
+        if (type == double.class) return 0.0;
+        if (type == float.class) return 0.0f;
+        if (type == boolean.class) return false;
+        if (type == short.class) return (short) 0;
+        if (type == byte.class) return (byte) 0;
+        if (type == char.class) return '\0';
+        return null; // Pour les types objets
     }
 }
