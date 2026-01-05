@@ -7,8 +7,35 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 
 /**
- * Utilitaire pour résoudre automatiquement les paramètres de méthodes
- * à partir des données de requête HTTP.
+ * Utilitaire pour résoudre automatiquement les paramètres de méthodes de contrôleur
+ * à partir des données de requête HTTP et des paramètres d'URL.
+ *
+ * Cette classe permet l'injection automatique de paramètres dans les méthodes
+ * de contrôleur en supportant :
+ * <ul>
+ *   <li>Paramètres de requête HTTP classiques (?name=value)</li>
+ *   <li>Paramètres extraits des URLs avec pattern (/users/{id})</li>
+ *   <li>Conversion automatique vers les types primitifs Java</li>
+ *   <li>Gestion des paramètres optionnels avec valeurs par défaut</li>
+ *   <li>Support de l'annotation {@code @RequestParam}</li>
+ * </ul>
+ *
+ * Exemples d'utilisation :
+ * <pre>
+ * // Dans un contrôleur
+ * {@code @GET("/users/{id}")}
+ * public ModelView getUser(@RequestParam String id, @RequestParam(defaultValue = "1") int page) {
+ *     // id sera extrait de l'URL, page des paramètres de requête ou défaut à 1
+ * }
+ *
+ * // Résolution automatique dans le DispatcherServlet
+ * Object[] args = ParameterResolver.resolveParameters(method, request, urlParams);
+ * Object result = method.invoke(controllerInstance, args);
+ * </pre>
+ *
+ * @see webframe.core.annotation.RequestParam
+ * @see webframe.core.DispatcherServlet
+ * @see webframe.core.util.UrlPatternMatcher
  */
 public class ParameterResolver {
 

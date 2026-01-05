@@ -27,7 +27,55 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Utilitaire de scan pour trouver les classes/sources annotées avec {@link Controller}.
+ * Utilitaire de scan pour découvrir automatiquement les contrôleurs et leurs routes annotées.
+ *
+ * Cette classe fournit des méthodes statiques pour scanner le classpath et découvrir :
+ * <ul>
+ *   <li>Les classes annotées avec {@code @Controller}</li>
+ *   <li>Les méthodes annotées avec {@code @Router}, {@code @GET}, ou {@code @POST}</li>
+ *   <li>La création automatique d'objets {@link ModelView} pour le routing</li>
+ * </ul>
+ *
+ * Le scanner supporte :
+ * <ul>
+ *   <li>Scan complet du classpath ou d'un package spécifique</li>
+ *   <li>Fonctionnement avec des JARs et des répertoires</li>
+ *   <li>Gestion des annotations multiples sur une même méthode</li>
+ *   <li>Support des verbes HTTP multiples avec {@code @Router}</li>
+ *   <li>Exclusion automatique des classes synthétiques et internes</li>
+ * </ul>
+ *
+ * Exemples d'utilisation :
+ * <pre>
+ * // Scanner tous les contrôleurs du classpath
+ * List&lt;Class&lt;?&gt;&gt; controllers = AnnotationScanner.findControllerClasses();
+ *
+ * // Scanner un package spécifique
+ * List&lt;Class&lt;?&gt;&gt; controllers = AnnotationScanner.findControllerClasses("com.monapp.controllers");
+ *
+ * // Scanner toutes les routes automatiquement
+ * List&lt;ModelView&gt; routes = AnnotationScanner.findAllRoutes();
+ *
+ * // Scanner les routes d'un package spécifique
+ * List&lt;ModelView&gt; routes = AnnotationScanner.findAllRoutes("com.monapp.controllers");
+ *
+ * // Scanner les méthodes de contrôleurs spécifiques
+ * List&lt;ModelView&gt; routes = AnnotationScanner.findRouterMethods(controllerClasses);
+ * </pre>
+ *
+ * Annotations supportées :
+ * <ul>
+ *   <li>{@code @Controller} - Marque une classe comme contrôleur</li>
+ *   <li>{@code @Router} - Route générique avec support multi-verbes</li>
+ *   <li>{@code @GET} - Route spécifique GET</li>
+ *   <li>{@code @POST} - Route spécifique POST</li>
+ * </ul>
+ *
+ * @see webframe.core.annotation.Controller
+ * @see webframe.core.annotation.Router
+ * @see webframe.core.annotation.GET
+ * @see webframe.core.annotation.POST
+ * @see webframe.core.tools.ModelView
  */
 public final class AnnotationScanner {
 
