@@ -10,7 +10,6 @@ import java.util.Map;
 
 /**
  * Contexte principal de l'application qui gère le mapping URL -> Contrôleur/Vue.
- *
  * Cette classe implémente le pattern Singleton et est responsable de :
  * <ul>
  *   <li>Scanner automatiquement les contrôleurs annotés avec {@code @Controller}</li>
