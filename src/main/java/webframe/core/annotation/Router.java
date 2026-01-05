@@ -23,4 +23,11 @@ public @interface Router {
      * @return le nom de la vue
      */
     String view() default "";
+
+    /**
+     * Les verbes HTTP supportés par cette route.
+     * Si vide, tous les verbes HTTP seront acceptés.
+     * @return tableau des verbes HTTP (GET, POST, PUT, DELETE, etc.)
+     */
+    String[] methods() default {};
 }
