@@ -40,6 +40,30 @@ List<ModelView> routes = AnnotationScanner.findAllRoutes("com.monapp.controllers
 List<ModelView> routes = AnnotationScanner.findRouterMethods(controllerClasses);
 ```
 
+### 🆕 **Nouvelles annotations et fonctionnalités**
+
+#### Annotations spécialisées
+- **`@GET`** : Routes spécifiques GET
+- **`@POST`** : Routes spécifiques POST  
+- **`@Router`** : Routes multi-verbes ou génériques
+
+#### Paramètres d'URL dynamiques
+```java
+@GET("/users/{id}")          // Capture l'ID depuis l'URL
+@POST("/products/{category}") // Capture la catégorie
+```
+
+#### 🆕 **Capture automatique des formulaires**
+```java
+@POST("/users")
+public ModelView createUser(Map<String, Object> formData) {
+    String name = (String) formData.get("name");
+    Integer age = (Integer) formData.get("age");      // Converti automatiquement
+    Boolean active = (Boolean) formData.get("active"); // Converti automatiquement
+    // Tous les champs du formulaire sont disponibles !
+}
+```
+
 ## Utilisation
 
 ### 1. Ajouter le framework comme dépendance

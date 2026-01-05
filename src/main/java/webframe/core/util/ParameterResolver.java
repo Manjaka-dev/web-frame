@@ -5,11 +5,14 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Utilitaire pour résoudre automatiquement les paramètres de méthodes de contrôleur
  * à partir des données de requête HTTP et des paramètres d'URL.
- *
  * Cette classe permet l'injection automatique de paramètres dans les méthodes
  * de contrôleur en supportant :
  * <ul>
@@ -18,14 +21,30 @@ import java.lang.reflect.Parameter;
  *   <li>Conversion automatique vers les types primitifs Java</li>
  *   <li>Gestion des paramètres optionnels avec valeurs par défaut</li>
  *   <li>Support de l'annotation {@code @RequestParam}</li>
+ *   <li><strong>Support des Map&lt;String, Object&gt; pour capturer tous les paramètres de formulaire</strong></li>
  * </ul>
  *
  * Exemples d'utilisation :
  * <pre>
- * // Dans un contrôleur
+ * // Paramètres individuels
  * {@code @GET("/users/{id}")}
  * public ModelView getUser(@RequestParam String id, @RequestParam(defaultValue = "1") int page) {
  *     // id sera extrait de l'URL, page des paramètres de requête ou défaut à 1
+ * }
+ *
+ * // Map pour capturer tous les paramètres d'un formulaire
+ * {@code @POST("/users")}
+ * public ModelView createUser(Map&lt;String, Object&gt; formData) {
+ *     String name = (String) formData.get("name");
+ *     String email = (String) formData.get("email");
+ *     Integer age = (Integer) formData.get("age");
+ *     // Tous les champs du formulaire sont automatiquement disponibles
+ * }
+ *
+ * // Combinaison des deux approches
+ * {@code @POST("/users/{id}")}
+ * public ModelView updateUser(@RequestParam String id, Map&lt;String, Object&gt; formData) {
+ *     // id extrait de l'URL, formData contient tous les champs du formulaire
  * }
  *
  * // Résolution automatique dans le DispatcherServlet
@@ -64,15 +83,28 @@ public class ParameterResolver {
         Parameter[] parameters = method.getParameters();
         Object[] args = new Object[parameters.length];
 
+        // Créer une seule fois la map de tous les paramètres du formulaire pour la réutiliser
+        Map<String, Object> allFormParameters = null;
+
         for (int i = 0; i < parameters.length; i++) {
             Parameter param = parameters[i];
-            RequestParam annotation = param.getAnnotation(RequestParam.class);
+            Class<?> paramType = param.getType();
 
-            // Déterminer le nom du paramètre à rechercher dans la requête
+            // Vérifier si le paramètre est une Map<String, Object> pour capturer tous les paramètres
+            if (isMapStringObject(param)) {
+                if (allFormParameters == null) {
+                    allFormParameters = createFormParametersMap(request, urlParameters);
+                }
+                args[i] = allFormParameters;
+                continue;
+            }
+
+            // Traitement classique pour les paramètres individuels avec @RequestParam
+            RequestParam annotation = param.getAnnotation(RequestParam.class);
             String paramName = getParameterName(param, annotation);
 
             // Récupérer la valeur: d'abord dans les paramètres d'URL, puis dans la requête HTTP
-            String paramValue = null;
+            String paramValue;
             if (urlParameters != null && urlParameters.containsKey(paramName)) {
                 paramValue = urlParameters.get(paramName);
             } else {
@@ -100,6 +132,102 @@ public class ParameterResolver {
             }
         }
         return param.getName();
+    }
+
+    /**
+     * Vérifie si un paramètre est de type Map<String, Object>.
+     */
+    private static boolean isMapStringObject(Parameter param) {
+        Class<?> paramType = param.getType();
+
+        // Vérifier si c'est une Map
+        if (!Map.class.isAssignableFrom(paramType)) {
+            return false;
+        }
+
+        // Vérifier les types génériques si disponibles
+        Type genericType = param.getParameterizedType();
+        if (genericType instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) genericType;
+            Type[] typeArguments = parameterizedType.getActualTypeArguments();
+
+            if (typeArguments.length == 2) {
+                // Vérifier que c'est Map<String, Object>
+                return typeArguments[0] == String.class && typeArguments[1] == Object.class;
+            }
+        }
+
+        // Si pas d'informations génériques, accepter quand même les Map
+        return true;
+    }
+
+    /**
+     * Crée une map contenant tous les paramètres du formulaire avec conversion automatique des types.
+     */
+    private static Map<String, Object> createFormParametersMap(HttpServletRequest request, Map<String, String> urlParameters) {
+        Map<String, Object> formData = new HashMap<>();
+
+        // Ajouter tous les paramètres de la requête HTTP
+        if (request.getParameterMap() != null) {
+            for (Map.Entry<String, String[]> entry : request.getParameterMap().entrySet()) {
+                String paramName = entry.getKey();
+                String[] values = entry.getValue();
+
+                if (values != null && values.length > 0) {
+                    if (values.length == 1) {
+                        // Un seul paramètre - convertir automatiquement le type
+                        formData.put(paramName, convertToAppropriateType(values[0]));
+                    } else {
+                        // Paramètres multiples - garder comme tableau de String
+                        formData.put(paramName, values);
+                    }
+                }
+            }
+        }
+
+        // Ajouter les paramètres d'URL (ils écrasent les paramètres de requête s'ils existent)
+        if (urlParameters != null) {
+            for (Map.Entry<String, String> entry : urlParameters.entrySet()) {
+                formData.put(entry.getKey(), convertToAppropriateType(entry.getValue()));
+            }
+        }
+
+        return formData;
+    }
+
+    /**
+     * Convertit automatiquement une chaîne vers le type le plus approprié.
+     */
+    private static Object convertToAppropriateType(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return value;
+        }
+
+        String trimmed = value.trim();
+
+        // Tenter conversion en boolean
+        if ("true".equalsIgnoreCase(trimmed) || "false".equalsIgnoreCase(trimmed) ||
+            "on".equalsIgnoreCase(trimmed) || "off".equalsIgnoreCase(trimmed) ||
+            "1".equals(trimmed) || "0".equals(trimmed)) {
+            return Boolean.parseBoolean(trimmed) || "on".equalsIgnoreCase(trimmed) || "1".equals(trimmed);
+        }
+
+        // Tenter conversion en entier
+        try {
+            return Integer.parseInt(trimmed);
+        } catch (NumberFormatException e) {
+            // Pas un entier
+        }
+
+        // Tenter conversion en double
+        try {
+            return Double.parseDouble(trimmed);
+        } catch (NumberFormatException e) {
+            // Pas un double
+        }
+
+        // Rester en String par défaut
+        return value;
     }
 
     /**
