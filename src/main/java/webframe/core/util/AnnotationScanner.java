@@ -2,6 +2,8 @@ package webframe.core.util;
 
 import webframe.core.annotation.Controller;
 import webframe.core.annotation.Router;
+import webframe.core.annotation.GET;
+import webframe.core.annotation.POST;
 import webframe.core.tools.ModelView;
 
 import java.io.File;
@@ -16,8 +18,10 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -137,7 +141,7 @@ public final class AnnotationScanner {
     }
 
     /**
-     * Scanne les méthodes annotées avec @Router dans une liste de classes de contrôleurs.
+     * Scanne les méthodes annotées avec @Router, @GET ou @POST dans une liste de classes de contrôleurs.
      * @param controllerClasses liste des classes de contrôleurs à scanner
      * @return liste des ModelView représentant les routes trouvées
      */
@@ -157,24 +161,93 @@ public final class AnnotationScanner {
             // Scanner toutes les méthodes de la classe
             Method[] methods = controllerClass.getDeclaredMethods();
             for (Method method : methods) {
-                Router routerAnnotation = method.getAnnotation(Router.class);
-                if (routerAnnotation != null) {
-                    String url = routerAnnotation.value();
-                    String annotationView = routerAnnotation.view();
-
-                    // La vue sera déterminée par l'exécution de la méthode
-                    // Pour l'instant, on utilise la vue de l'annotation ou le nom de la méthode comme fallback
-                    String fallbackView = (annotationView != null && !annotationView.trim().isEmpty())
-                        ? annotationView
-                        : method.getName();
-
-                    ModelView modelView = new ModelView(url, method, fallbackView, controllerClass);
+                ModelView modelView = processMethodAnnotations(method, controllerClass);
+                if (modelView != null) {
                     routes.add(modelView);
                 }
             }
         }
 
         return routes;
+    }
+
+    /**
+     * Traite les annotations d'une méthode pour créer un ModelView.
+     * Supporte @Router (avec verbes multiples ou tous), @GET et @POST.
+     *
+     * @param method la méthode à analyser
+     * @param controllerClass la classe du contrôleur
+     * @return ModelView créé ou null si aucune annotation de route trouvée
+     */
+    private static ModelView processMethodAnnotations(Method method, Class<?> controllerClass) {
+        Router routerAnnotation = method.getAnnotation(Router.class);
+        GET getAnnotation = method.getAnnotation(GET.class);
+        POST postAnnotation = method.getAnnotation(POST.class);
+
+        // Si aucune annotation de route, retourner null
+        if (routerAnnotation == null && getAnnotation == null && postAnnotation == null) {
+            return null;
+        }
+
+        String url = null;
+        String fallbackView = null;
+        Map<String, Method> methodMap = new HashMap<>();
+
+        // Traitement de @Router
+        if (routerAnnotation != null) {
+            url = routerAnnotation.value();
+            String annotationView = routerAnnotation.view();
+            fallbackView = (annotationView != null && !annotationView.trim().isEmpty())
+                ? annotationView : method.getName();
+
+            String[] supportedMethods = routerAnnotation.methods();
+            if (supportedMethods.length == 0) {
+                // Si aucun verbe spécifié, accepter tous les verbes HTTP principaux
+                methodMap.put("GET", method);
+                methodMap.put("POST", method);
+                methodMap.put("PUT", method);
+                methodMap.put("DELETE", method);
+                methodMap.put("PATCH", method);
+            } else {
+                // Ajouter seulement les verbes spécifiés
+                for (String httpMethod : supportedMethods) {
+                    methodMap.put(httpMethod.toUpperCase(), method);
+                }
+            }
+        }
+
+        // Traitement de @GET
+        if (getAnnotation != null) {
+            if (url == null) {
+                url = getAnnotation.value();
+            }
+            String annotationView = getAnnotation.view();
+            if (annotationView != null && !annotationView.trim().isEmpty()) {
+                fallbackView = annotationView;
+            }
+            if (fallbackView == null) {
+                fallbackView = method.getName();
+            }
+            methodMap.put("GET", method);
+        }
+
+        // Traitement de @POST
+        if (postAnnotation != null) {
+            if (url == null) {
+                url = postAnnotation.value();
+            }
+            String annotationView = postAnnotation.view();
+            if (annotationView != null && !annotationView.trim().isEmpty()) {
+                fallbackView = annotationView;
+            }
+            if (fallbackView == null) {
+                fallbackView = method.getName();
+            }
+            methodMap.put("POST", method);
+        }
+
+        // Créer le ModelView avec la map des méthodes
+        return new ModelView(url, methodMap, fallbackView, controllerClass);
     }
 
     /**
