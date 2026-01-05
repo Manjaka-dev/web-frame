@@ -58,33 +58,93 @@ Ajoutez la dépendance dans votre projet :
 </dependency>
 ```
 
-### 2. Créer des contrôleurs avec routes
+### 2. Créer des contrôleurs avec les nouvelles annotations
 
 ```java
 package com.monapp.controllers;
 
 import webframe.core.annotation.Controller;
 import webframe.core.annotation.Router;
+import webframe.core.annotation.GET;
+import webframe.core.annotation.POST;
+import webframe.core.annotation.RequestParam;
+import webframe.core.tools.ModelView;
 
-@Controller
-public class MonController {
+@Controller(base = "/api")
+public class UserController {
     
-    @Router(value = "/bonjour", view = "greeting")
-    public String bonjour() {
-        return "Bonjour depuis MonController !";
+    // Route GET spécialisée avec paramètre d'URL
+    @GET("/users/{id}")
+    public ModelView getUser(@RequestParam String id) {
+        ModelView mv = new ModelView();
+        mv.setView("user-details");
+        mv.addData("userId", id);
+        return mv;
     }
     
-    @Router("/api/goodbye")
-    public String auRevoir() {
-        return "Au revoir !";
+    // Route POST spécialisée
+    @POST("/users")
+    public ModelView createUser(@RequestParam String name, 
+                               @RequestParam(defaultValue = "user@example.com") String email) {
+        ModelView mv = new ModelView();
+        mv.setView("user-created");
+        mv.addData("userName", name);
+        mv.addData("userEmail", email);
+        return mv;
     }
     
-    // Méthode sans @Router - ne sera pas détectée comme route
-    public String helper() {
-        return "Méthode utilitaire";
+    // Route générique supportant plusieurs verbes HTTP
+    @Router(value = "/products/{category}", methods = {"GET", "POST", "PUT"})
+    public ModelView handleProduct(@RequestParam String category, 
+                                  @RequestParam(required = false) String action) {
+        ModelView mv = new ModelView();
+        mv.setView("product-handler");
+        mv.addData("productCategory", category);
+        mv.addData("requestedAction", action != null ? action : "default");
+        return mv;
+    }
+    
+    // Route acceptant tous les verbes HTTP
+    @Router("/admin/{path}")
+    public ModelView adminCatchAll(@RequestParam String path) {
+        ModelView mv = new ModelView();
+        mv.setView("admin-panel");
+        mv.addData("adminPath", path);
+        return mv;
+    }
+    
+    // Même URL, comportements différents selon le verbe HTTP
+    @GET("/contact")
+    public ModelView showContactForm() {
+        return new ModelView("/contact", null, "contact-form", this.getClass());
+    }
+    
+    @POST("/contact")
+    public ModelView submitContact(@RequestParam String name, @RequestParam String message) {
+        ModelView mv = new ModelView();
+        mv.setView("contact-success");
+        mv.addData("contactName", name);
+        return mv;
     }
 }
 ```
+
+### Avantages des nouvelles annotations
+
+#### `@GET` et `@POST`
+- **Spécialisées** : Clairement dédiées à un verbe HTTP spécifique
+- **Lisibles** : Code plus expressif et maintenable
+- **Type-safe** : Évitent les erreurs de configuration de verbes
+
+#### `@Router` amélioré
+- **Multi-verbes** : `@Router(methods={"GET", "POST", "PUT"})`
+- **Catch-all** : `@Router("/admin/{path}")` accepte tous les verbes si `methods` est vide
+- **Flexible** : Permet des configurations complexes
+
+#### Paramètres d'URL dynamiques
+- **Extraction automatique** : `/users/{id}` → `@RequestParam String id`
+- **Typage** : Support des types primitifs (int, long, boolean, etc.)
+- **Validation** : Paramètres requis/optionnels avec valeurs par défaut
 
 ### 3. Scanner automatiquement dans votre servlet
 
@@ -155,6 +215,11 @@ Le framework est prêt pour la production :
 
 ### Fonctionnalités validées :
 - Scanner de base et nouvelles méthodes
+- **Nouvelles annotations `@GET` et `@POST`**
+- **Support des paramètres d'URL dynamiques (`/users/{id}`)**
+- **Annotation `@Router` avec verbes HTTP multiples**
+- **Injection automatique des paramètres avec `@RequestParam`**
+- **Documentation Javadoc complète pour tous les composants**
 - Tests de performance (~2.1ms par scan)
 - Démonstration complète du scanner
 - Utilisation pratique en production
