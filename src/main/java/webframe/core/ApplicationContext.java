@@ -9,7 +9,31 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Contexte de l'application qui gère le mapping URL -> Vue
+ * Contexte principal de l'application qui gère le mapping URL -> Contrôleur/Vue.
+ *
+ * Cette classe implémente le pattern Singleton et est responsable de :
+ * <ul>
+ *   <li>Scanner automatiquement les contrôleurs annotés avec {@code @Controller}</li>
+ *   <li>Enregistrer les routes définies par {@code @Router}, {@code @GET}, {@code @POST}</li>
+ *   <li>Résoudre les URLs avec support des paramètres (ex: /users/{id})</li>
+ *   <li>Gérer les verbes HTTP multiples pour une même route</li>
+ * </ul>
+ *
+ * Exemple d'utilisation :
+ * <pre>
+ * ApplicationContext context = ApplicationContext.getInstance();
+ * ModelView route = context.findRoute("/users/123", "GET");
+ * if (route != null) {
+ *     Method method = route.getMethod("GET");
+ *     // Exécuter la méthode du contrôleur...
+ * }
+ * </pre>
+ *
+ * @see ModelView
+ * @see webframe.core.annotation.Controller
+ * @see webframe.core.annotation.Router
+ * @see webframe.core.annotation.GET
+ * @see webframe.core.annotation.POST
  */
 public class ApplicationContext {
 
@@ -46,12 +70,23 @@ public class ApplicationContext {
     }
 
     /**
-     * Exécute la méthode du contrôleur pour obtenir le nom de la vue
+     * Exécute la méthode du contrôleur pour obtenir le nom de la vue.
+     * Utilise la méthode GET par défaut, ou la première méthode disponible.
      */
     private String executeMethodForView(ModelView route) {
         try {
             Object controllerInstance = route.getController().getDeclaredConstructor().newInstance();
-            java.lang.reflect.Method method = route.getMethod();
+
+            // Chercher une méthode à exécuter (priorité GET, sinon la première disponible)
+            java.lang.reflect.Method method = route.getMethod("GET");
+            if (method == null && !route.getMethods().isEmpty()) {
+                method = route.getMethods().values().iterator().next();
+            }
+
+            if (method == null) {
+                System.err.println("Aucune méthode trouvée pour la route: " + route.getUrl());
+                return route.getView();
+            }
 
             // Si la méthode a des paramètres, créer des valeurs par défaut pour l'initialisation
             Object[] args = new Object[method.getParameterCount()];
@@ -72,15 +107,30 @@ public class ApplicationContext {
             } else if (result instanceof String) {
                 return result.toString();
             } else {
-                System.err.println("Attention: La méthode " + route.getMethod().getName() +
+                System.err.println("Attention: La méthode " + method.getName() +
                                  " ne retourne pas un String. Vue par défaut utilisée.");
                 return route.getView(); // Utiliser la vue par défaut
             }
         } catch (Exception e) {
-            System.err.println("Erreur lors de l'exécution de " + route.getMethod().getName() +
-                             " pour obtenir la vue: " + e.getMessage());
+            System.err.println("Erreur lors de l'exécution de la méthode pour obtenir la vue: " + e.getMessage());
             return route.getView(); // Utiliser la vue par défaut
         }
+    }
+
+    /**
+     * Trouve une route correspondante à l'URL pour un verbe HTTP spécifique.
+     * Supporte les patterns avec paramètres comme /url/{id}.
+     *
+     * @param url l'URL de la requête
+     * @param httpMethod le verbe HTTP (GET, POST, etc.)
+     * @return la route correspondante ou null si non trouvée
+     */
+    public ModelView findRoute(String url, String httpMethod) {
+        ModelView route = findRoute(url);
+        if (route != null && route.hasMethod(httpMethod)) {
+            return route;
+        }
+        return null;
     }
 
     /**
@@ -100,7 +150,7 @@ public class ApplicationContext {
             ModelView route = routeMap.get(matchingPattern);
             if (route != null) {
                 // Créer une copie du ModelView pour cette requête spécifique
-                ModelView specificRoute = new ModelView(url, route.getMethod(), route.getView(), route.getController());
+                ModelView specificRoute = new ModelView(url, route.getMethods(), route.getView(), route.getController());
 
                 // Copier les données existantes
                 specificRoute.getData().putAll(route.getData());

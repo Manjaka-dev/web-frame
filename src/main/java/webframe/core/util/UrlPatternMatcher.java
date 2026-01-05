@@ -5,8 +5,42 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Utilitaire pour matcher des patterns d'URL avec des paramètres.
- * Supporte les patterns comme /url/{id} où {id} peut être un entier, un UUID, etc.
+ * Utilitaire pour matcher des patterns d'URL avec des paramètres dynamiques.
+ *
+ * Cette classe fournit des méthodes pour :
+ * <ul>
+ *   <li>Normaliser des URLs concrètes en patterns (/users/123 → /users/{int})</li>
+ *   <li>Trouver des patterns correspondants dans une collection de routes</li>
+ *   <li>Extraire les paramètres de valeur depuis les URLs (/users/123 avec pattern /users/{id})</li>
+ *   <li>Supporter différents types de paramètres (int, uuid, string)</li>
+ * </ul>
+ *
+ * Exemples d'utilisation :
+ * <pre>
+ * // Normalisation d'URL
+ * String pattern = UrlPatternMatcher.normalizeUrl("/users/123/profile");
+ * // Résultat: "/users/{int}/profile"
+ *
+ * // Recherche de pattern correspondant
+ * Map&lt;String, ModelView&gt; routes = ...; // routes avec patterns comme /users/{id}
+ * String matching = UrlPatternMatcher.findMatchingPattern(routes, "/users/123");
+ * // Résultat: "/users/{id}" si ce pattern existe dans routes
+ *
+ * // Extraction de paramètres
+ * Map&lt;String, String&gt; params = UrlPatternMatcher.extractParameters("/users/123", "/users/{id}");
+ * // Résultat: {"id" → "123"}
+ * </pre>
+ *
+ * Types de paramètres supportés :
+ * <ul>
+ *   <li><code>{id}</code> - Paramètre nommé, accepte toute valeur</li>
+ *   <li><code>{int}</code> - Détecté automatiquement pour les nombres entiers</li>
+ *   <li><code>{uuid}</code> - Détecté automatiquement pour les UUIDs</li>
+ * </ul>
+ *
+ * @see webframe.core.ApplicationContext
+ * @see webframe.core.tools.ModelView
+ * @see webframe.core.util.ParameterResolver
  */
 public final class UrlPatternMatcher {
 

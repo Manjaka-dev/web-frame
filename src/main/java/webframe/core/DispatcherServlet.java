@@ -15,6 +15,33 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Servlet principal qui dispatche les requêtes HTTP vers les contrôleurs appropriés.
+ *
+ * Cette classe étend {@link HttpServlet} et agit comme un front controller pour
+ * le framework web. Elle est responsable de :
+ * <ul>
+ *   <li>Initialiser le contexte de l'application au démarrage</li>
+ *   <li>Router les requêtes HTTP (GET, POST, etc.) vers les bons contrôleurs</li>
+ *   <li>Résoudre les paramètres de méthode à partir des requêtes HTTP et des URLs</li>
+ *   <li>Exécuter les méthodes des contrôleurs avec injection de dépendances</li>
+ *   <li>Gérer le rendu des vues et les erreurs</li>
+ * </ul>
+ *
+ * Le servlet utilise l'annotation {@code @WebServlet("/")} pour capturer toutes
+ * les requêtes et les dispatcher selon les routes définies dans les contrôleurs.
+ *
+ * Exemple d'utilisation dans web.xml ou via l'annotation :
+ * <pre>
+ * // Automatiquement configuré via l'annotation @WebServlet
+ * // Toutes les requêtes HTTP sont dirigées vers ce servlet
+ * </pre>
+ *
+ * @see ApplicationContext
+ * @see ModelView
+ * @see webframe.core.annotation.Controller
+ * @see webframe.core.util.ParameterResolver
+ */
 @WebServlet("/")
 public class DispatcherServlet extends HttpServlet {
 
@@ -28,18 +55,34 @@ public class DispatcherServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        handleRequest(req, resp, "GET");
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        handleRequest(req, resp, "POST");
+    }
+
+    /**
+     * Gère une requête HTTP avec un verbe spécifique.
+     *
+     * @param req la requête HTTP
+     * @param resp la réponse HTTP
+     * @param httpMethod le verbe HTTP (GET, POST, etc.)
+     */
+    private void handleRequest(HttpServletRequest req, HttpServletResponse resp, String httpMethod) throws IOException {
         String requestPath = req.getRequestURI();
         resp.setContentType("text/html;charset=UTF-8");
 
         try (PrintWriter out = resp.getWriter()) {
-            ModelView matchingRoute = appContext.findRoute(requestPath);
+            ModelView matchingRoute = appContext.findRoute(requestPath, httpMethod);
 
             if (matchingRoute != null) {
                 try {
                     // Exécuter la méthode du contrôleur et récupérer un ModelView mis à jour
-                    ModelView executed = executeRouteMethod(matchingRoute, req);
+                    ModelView executed = executeRouteMethod(matchingRoute, req, httpMethod);
                     resp.setStatus(HttpServletResponse.SC_OK);
-                    showView(executed, out);
+                    showView(executed, out, httpMethod);
                 } catch (Exception e) {
                     resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
                     showError(out, e.toString());
@@ -54,19 +97,18 @@ public class DispatcherServlet extends HttpServlet {
         }
     }
 
-    @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        // Utiliser la même logique que GET pour traiter les formulaires
-        doGet(req, resp);
-    }
 
     /**
-     * Exécute la méthode du contrôleur et met à jour le ModelView retourné
+     * Exécute la méthode du contrôleur et met à jour le ModelView retourné.
+     *
+     * @param route la route à exécuter
+     * @param request la requête HTTP
+     * @param httpMethod le verbe HTTP (GET, POST, etc.)
      */
-    private ModelView executeRouteMethod(ModelView route, HttpServletRequest request) throws Exception {
+    private ModelView executeRouteMethod(ModelView route, HttpServletRequest request, String httpMethod) throws Exception {
         if (route == null) return route;
 
-        Method method = route.getMethod();
+        Method method = route.getMethod(httpMethod);
         Class<?> controllerClass = route.getController();
         if (method == null || controllerClass == null) return route;
 
@@ -132,9 +174,13 @@ public class DispatcherServlet extends HttpServlet {
     }
 
     /**
-     * Affiche la vue correspondante à une route (avec les données)
+     * Affiche la vue correspondante à une route (avec les données).
+     *
+     * @param route la route exécutée
+     * @param out le writer pour la réponse
+     * @param httpMethod le verbe HTTP utilisé
      */
-    private void showView(ModelView route, PrintWriter out) {
+    private void showView(ModelView route, PrintWriter out, String httpMethod) {
         out.println("<!doctype html>");
         out.println("<html lang=\"fr\">\n<head>\n<meta charset=\"utf-8\">\n<title>Vue: " + escapeHtml(route.getView()) + "</title>\n</head>");
         out.println("<body>");
@@ -144,7 +190,23 @@ public class DispatcherServlet extends HttpServlet {
         out.println("<h2>✅ Route trouvée et vue retournée</h2>");
         out.println("<p><strong>URL demandée:</strong> " + escapeHtml(route.getUrl()) + "</p>");
         out.println("<p><strong>Contrôleur:</strong> " + escapeHtml(route.getController().getSimpleName()) + "</p>");
-        out.println("<p><strong>Méthode:</strong> " + escapeHtml(route.getMethod().getName()) + "</p>");
+        out.println("<p><strong>Verbe HTTP:</strong> " + escapeHtml(httpMethod) + "</p>");
+
+        Method executedMethod = route.getMethod(httpMethod);
+        if (executedMethod != null) {
+            out.println("<p><strong>Méthode exécutée:</strong> " + escapeHtml(executedMethod.getName()) + "</p>");
+        }
+
+        // Afficher toutes les méthodes disponibles pour cette route
+        out.println("<p><strong>Méthodes disponibles:</strong> ");
+        boolean first = true;
+        for (Map.Entry<String, Method> entry : route.getMethods().entrySet()) {
+            if (!first) out.print(", ");
+            out.print(escapeHtml(entry.getKey()) + " → " + escapeHtml(entry.getValue().getName()));
+            first = false;
+        }
+        out.println("</p>");
+
         out.println("<p><strong>Vue retournée:</strong> <code>" + escapeHtml(route.getView()) + "</code></p>");
         out.println("</div>");
 
@@ -251,7 +313,15 @@ public class DispatcherServlet extends HttpServlet {
                 out.println("<td><code>" + escapeHtml(route.getUrl()) + "</code></td>");
                 out.println("<td><strong>" + escapeHtml(route.getView()) + "</strong></td>");
                 out.println("<td>" + escapeHtml(route.getController().getSimpleName()) + "</td>");
-                out.println("<td>" + escapeHtml(route.getMethod().getName()) + "()</td>");
+
+                // Afficher toutes les méthodes HTTP supportées
+                StringBuilder methodsInfo = new StringBuilder();
+                for (Map.Entry<String, Method> entry : route.getMethods().entrySet()) {
+                    if (methodsInfo.length() > 0) methodsInfo.append(", ");
+                    methodsInfo.append(entry.getKey()).append(": ").append(entry.getValue().getName()).append("()");
+                }
+                out.println("<td>" + escapeHtml(methodsInfo.toString()) + "</td>");
+
                 out.println("<td><a href='" + escapeHtml(route.getUrl()) + "' style='background-color:#2196F3; color:white; padding:5px 10px; text-decoration:none; border-radius:3px;'>Voir Vue</a></td>");
                 out.println("</tr>");
             }
