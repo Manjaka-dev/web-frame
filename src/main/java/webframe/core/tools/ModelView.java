@@ -156,6 +156,25 @@ public class ModelView {
     }
 
     /**
+     * Ajoute un objet à la vue (alias pour addData).
+     *
+     * @param key la clé de l'objet
+     * @param value la valeur de l'objet
+     */
+    public void addObject(String key, Object value) {
+        addData(key, value);
+    }
+
+    /**
+     * Définit le nom de la vue (alias pour setView).
+     *
+     * @param viewName le nom de la vue
+     */
+    public void setViewName(String viewName) {
+        setView(viewName);
+    }
+
+    /**
      * Retourne toutes les données associées à cette vue.
      *
      * @return map des données

@@ -7,6 +7,8 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.lang.reflect.Field;
+import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,6 +24,8 @@ import java.util.Map;
  *   <li>Gestion des paramètres optionnels avec valeurs par défaut</li>
  *   <li>Support de l'annotation {@code @RequestParam}</li>
  *   <li><strong>Support des Map&lt;String, Object&gt; pour capturer tous les paramètres de formulaire</strong></li>
+ *   <li><strong>Support des objets complexes avec injection automatique de champs</strong></li>
+ *   <li><strong>Support des objets imbriqués avec notation pointée (emp.dept.nom)</strong></li>
  * </ul>
  *
  * Exemples d'utilisation :
@@ -41,15 +45,53 @@ import java.util.Map;
  *     // Tous les champs du formulaire sont automatiquement disponibles
  * }
  *
- * // Combinaison des deux approches
+ * // Objets complexes avec injection automatique
+ * {@code @POST("/employees")}
+ * public ModelView saveEmployee(Employe emp, Departement dept) {
+ *     // Les champs emp.nom, emp.poste, dept.nom, etc. sont automatiquement injectés
+ *     // depuis les paramètres du formulaire HTML
+ * }
+ *
+ * // Objets imbriqués avec notation pointée
+ * {@code @POST("/employees")}
+ * public ModelView saveEmployeeWithDept(Employe emp) {
+ *     // Support des champs comme emp.nom, emp.dept.nom, emp.dept.code
+ *     // L'objet Departement est automatiquement créé et assigné à emp.dept
+ * }
+ *
+ * // Combinaison des approches
  * {@code @POST("/users/{id}")}
- * public ModelView updateUser(@RequestParam String id, Map&lt;String, Object&gt; formData) {
- *     // id extrait de l'URL, formData contient tous les champs du formulaire
+ * public ModelView updateUser(@RequestParam String id, User user, Map&lt;String, Object&gt; extraData) {
+ *     // id extrait de l'URL, user créé depuis les paramètres, extraData contient tout
  * }
  *
  * // Résolution automatique dans le DispatcherServlet
  * Object[] args = ParameterResolver.resolveParameters(method, request, urlParams);
  * Object result = method.invoke(controllerInstance, args);
+ * </pre>
+ *
+ * <h3>Convention pour les objets complexes :</h3>
+ * <p>Les champs HTML doivent suivre la convention de nommage suivante :</p>
+ * <pre>
+ * &lt;input name="emp.nom" value="Dupont" /&gt;
+ * &lt;input name="emp.poste" value="Développeur" /&gt;
+ * &lt;input name="emp.dept.nom" value="IT" /&gt;
+ * &lt;input name="emp.dept.code" value="DEV" /&gt;
+ * </pre>
+ * <p>Correspond à :</p>
+ * <pre>
+ * public class Employe {
+ *     private String nom;
+ *     private String poste;
+ *     private Departement dept;
+ *     // constructeurs, getters/setters...
+ * }
+ *
+ * public class Departement {
+ *     private String nom;
+ *     private String code;
+ *     // constructeurs, getters/setters...
+ * }
  * </pre>
  *
  * @see webframe.core.annotation.RequestParam
@@ -96,6 +138,15 @@ public class ParameterResolver {
                     allFormParameters = createFormParametersMap(request, urlParameters);
                 }
                 args[i] = allFormParameters;
+                continue;
+            }
+
+            // Vérifier si c'est un objet complexe (classe personnalisée)
+            if (isCustomObject(paramType)) {
+                if (allFormParameters == null) {
+                    allFormParameters = createFormParametersMap(request, urlParameters);
+                }
+                args[i] = createObjectFromParameters(paramType, allFormParameters, param.getName());
                 continue;
             }
 
@@ -159,6 +210,155 @@ public class ParameterResolver {
 
         // Si pas d'informations génériques, accepter quand même les Map
         return true;
+    }
+
+    /**
+     * Détermine si une classe représente un objet complexe personnalisé
+     * qui peut être créé à partir des paramètres de formulaire.
+     */
+    private static boolean isCustomObject(Class<?> type) {
+        // Exclure les types primitifs, wrapper et collections Java standard
+        if (type.isPrimitive()) return false;
+        if (type == String.class) return false;
+        if (type == Integer.class || type == int.class) return false;
+        if (type == Long.class || type == long.class) return false;
+        if (type == Double.class || type == double.class) return false;
+        if (type == Float.class || type == float.class) return false;
+        if (type == Boolean.class || type == boolean.class) return false;
+        if (type == Short.class || type == short.class) return false;
+        if (type == Byte.class || type == byte.class) return false;
+        if (type == Character.class || type == char.class) return false;
+        if (Map.class.isAssignableFrom(type)) return false;
+        if (java.util.Collection.class.isAssignableFrom(type)) return false;
+        if (type.getPackage() != null && type.getPackage().getName().startsWith("java.")) return false;
+        if (type.getPackage() != null && type.getPackage().getName().startsWith("jakarta.")) return false;
+
+        // Vérifier qu'il a un constructeur par défaut
+        try {
+            type.getDeclaredConstructor();
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Crée une instance d'objet complexe à partir des paramètres de formulaire.
+     * Cette méthode supporte les objets imbriqués en utilisant une notation pointée.
+     *
+     * Par exemple, pour un objet Employe avec un champ Departement :
+     * - emp.nom -> définit le nom de l'employé
+     * - emp.dept.nom -> définit le nom du département de l'employé
+     *
+     * @param objectType le type de classe à créer
+     * @param allParameters tous les paramètres disponibles
+     * @param parameterPrefix le préfixe du paramètre (nom du paramètre dans la méthode)
+     * @return une instance de l'objet créé et populé
+     */
+    private static Object createObjectFromParameters(Class<?> objectType, Map<String, Object> allParameters, String parameterPrefix) {
+        try {
+            // Créer une instance de l'objet
+            Constructor<?> constructor = objectType.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            Object instance = constructor.newInstance();
+
+            // Obtenir tous les champs de la classe
+            Field[] fields = objectType.getDeclaredFields();
+
+            for (Field field : fields) {
+                field.setAccessible(true);
+                Class<?> fieldType = field.getType();
+                String fieldName = field.getName();
+
+                // Chercher des paramètres qui correspondent à ce champ
+                // Format attendu: parameterPrefix.fieldName (ex: emp.nom)
+                String fullFieldName = parameterPrefix + "." + fieldName;
+
+                Object value = null;
+
+                // Vérifier si on a une valeur directe pour ce champ
+                if (allParameters.containsKey(fullFieldName)) {
+                    value = allParameters.get(fullFieldName);
+                    // Convertir au type approprié si nécessaire
+                    value = convertValueToType(value, fieldType);
+                } else if (allParameters.containsKey(fieldName)) {
+                    // Essayer aussi sans le préfixe (format direct)
+                    value = allParameters.get(fieldName);
+                    value = convertValueToType(value, fieldType);
+                }
+
+                // Si c'est un objet complexe imbriqué, le créer récursivement
+                if (value == null && isCustomObject(fieldType)) {
+                    // Chercher des paramètres qui commencent par le préfixe de ce champ
+                    Map<String, Object> nestedParameters = new HashMap<>();
+                    String nestedPrefix = parameterPrefix + "." + fieldName;
+
+                    for (Map.Entry<String, Object> entry : allParameters.entrySet()) {
+                        if (entry.getKey().startsWith(nestedPrefix + ".")) {
+                            nestedParameters.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+
+                    if (!nestedParameters.isEmpty()) {
+                        value = createObjectFromParameters(fieldType, allParameters, nestedPrefix);
+                    }
+                }
+
+                // Définir la valeur du champ si on en a trouvé une
+                if (value != null) {
+                    field.set(instance, value);
+                }
+            }
+
+            return instance;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Erreur lors de la création de l'objet " + objectType.getSimpleName() + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Convertit une valeur vers le type spécifié.
+     */
+    private static Object convertValueToType(Object value, Class<?> targetType) {
+        if (value == null) return null;
+
+        // Si le type est déjà correct
+        if (targetType.isAssignableFrom(value.getClass())) {
+            return value;
+        }
+
+        // Convertir depuis String
+        String stringValue = value.toString();
+
+        try {
+            if (targetType == String.class) {
+                return stringValue;
+            } else if (targetType == int.class || targetType == Integer.class) {
+                return Integer.parseInt(stringValue);
+            } else if (targetType == long.class || targetType == Long.class) {
+                return Long.parseLong(stringValue);
+            } else if (targetType == double.class || targetType == Double.class) {
+                return Double.parseDouble(stringValue);
+            } else if (targetType == float.class || targetType == Float.class) {
+                return Float.parseFloat(stringValue);
+            } else if (targetType == boolean.class || targetType == Boolean.class) {
+                return Boolean.parseBoolean(stringValue) || "on".equalsIgnoreCase(stringValue) || "1".equals(stringValue);
+            } else if (targetType == short.class || targetType == Short.class) {
+                return Short.parseShort(stringValue);
+            } else if (targetType == byte.class || targetType == Byte.class) {
+                return Byte.parseByte(stringValue);
+            } else if (targetType == char.class || targetType == Character.class) {
+                return !stringValue.isEmpty() ? stringValue.charAt(0) : '\0';
+            }
+
+            // Si aucune conversion n'est possible, retourner la valeur originale
+            return value;
+
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                String.format("Impossible de convertir '%s' en %s", stringValue, targetType.getSimpleName()));
+        }
     }
 
     /**
