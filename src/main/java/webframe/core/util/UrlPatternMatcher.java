@@ -6,7 +6,6 @@ import java.util.regex.Pattern;
 
 /**
  * Utilitaire pour matcher des patterns d'URL avec des paramètres dynamiques.
- *
  * Cette classe fournit des méthodes pour :
  * <ul>
  *   <li>Normaliser des URLs concrètes en patterns (/users/123 → /users/{int})</li>

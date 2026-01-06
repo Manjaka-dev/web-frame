@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exemple - Injection d'objets complexes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .form-container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        h1, h2 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+        }
+        .submit-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        .submit-btn:hover {
+            background-color: #45a049;
+        }
+        .section-title {
+            background-color: #e8f5e8;
+            padding: 10px;
+            border-left: 4px solid #4CAF50;
+            margin: 20px 0 10px 0;
+            font-weight: bold;
+        }
+        .code-example {
+            background-color: #f8f8f8;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 15px 0;
+            overflow-x: auto;
+        }
+        .note {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .example-section {
+            margin-bottom: 40px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Framework Web - Injection d'objets complexes</h1>
+
+    <div class="note">
+        <strong>📋 Comment ça marche :</strong> Ce framework peut automatiquement créer et populer des objets Java complexes à partir des données de formulaire HTML. Les champs de formulaire utilisent une notation pointée (comme <code>emp.nom</code>, <code>emp.dept.nom</code>) pour mapper directement aux propriétés des objets Java.
+    </div>
+
+    <!-- Exemple 1: Objet simple -->
+    <div class="example-section">
+        <div class="form-container">
+            <h2>📝 Exemple 1: Création d'un département</h2>
+
+            <div class="section-title">Formulaire HTML</div>
+            <form method="POST" action="/departments">
+                <div class="form-group">
+                    <label for="dept-nom">Nom du département:</label>
+                    <input type="text" id="dept-nom" name="dept.nom" value="Ressources Humaines" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="dept-code">Code département:</label>
+                    <input type="text" id="dept-code" name="dept.code" value="RH" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="dept-description">Description:</label>
+                    <textarea id="dept-description" name="dept.description" rows="3">Gestion des ressources humaines et du personnel</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="dept-id">ID (optionnel):</label>
+                    <input type="number" id="dept-id" name="dept.id" value="1">
+                </div>
+
+                <button type="submit" class="submit-btn">💾 Créer le département</button>
+            </form>
+
+            <div class="section-title">Méthode du contrôleur correspondante</div>
+            <div class="code-example">
+@POST("/departments")
+public ModelView createDepartment(Departement dept) {
+    // L'objet dept est automatiquement créé et populé
+    // à partir des paramètres dept.nom, dept.code, etc.
+
+    System.out.println("Département reçu: " + dept);
+    // dept.getNom() = "Ressources Humaines"
+    // dept.getCode() = "RH"
+    // dept.getDescription() = "Gestion des ressources humaines..."
+    // dept.getId() = 1
+
+    return new ModelView("department-created.jsp");
+}
+            </div>
+        </div>
+    </div>
+
+    <!-- Exemple 2: Objets imbriqués -->
+    <div class="example-section">
+        <div class="form-container">
+            <h2>👥 Exemple 2: Création d'un employé avec département (objets imbriqués)</h2>
+
+            <div class="section-title">Formulaire HTML</div>
+            <form method="POST" action="/employees">
+                <div class="section-title">Informations de l'employé</div>
+                <div class="form-group">
+                    <label for="emp-nom">Nom complet:</label>
+                    <input type="text" id="emp-nom" name="emp.nom" value="Jean Dupont" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="emp-poste">Poste:</label>
+                    <input type="text" id="emp-poste" name="emp.poste" value="Développeur Senior" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="emp-salaire">Salaire:</label>
+                    <input type="number" id="emp-salaire" name="emp.salaire" value="65000" step="1000">
+                </div>
+
+                <div class="form-group">
+                    <label for="emp-id">ID employé:</label>
+                    <input type="number" id="emp-id" name="emp.id" value="123">
+                </div>
+
+                <div class="section-title">Département de l'employé</div>
+                <div class="form-group">
+                    <label for="emp-dept-nom">Nom du département:</label>
+                    <input type="text" id="emp-dept-nom" name="emp.dept.nom" value="Informatique" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="emp-dept-code">Code département:</label>
+                    <input type="text" id="emp-dept-code" name="emp.dept.code" value="IT" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="emp-dept-description">Description département:</label>
+                    <input type="text" id="emp-dept-description" name="emp.dept.description" value="Département informatique">
+                </div>
+
+                <div class="form-group">
+                    <label for="emp-dept-id">ID département:</label>
+                    <input type="number" id="emp-dept-id" name="emp.dept.id" value="2">
+                </div>
+
+                <button type="submit" class="submit-btn">👤 Créer l'employé</button>
+            </form>
+
+            <div class="section-title">Méthode du contrôleur correspondante</div>
+            <div class="code-example">
+@POST("/employees")
+public ModelView createEmployee(Employe emp) {
+    // L'objet emp est automatiquement créé avec toutes ses propriétés
+    // Y compris l'objet Departement imbriqué (emp.dept)
+
+    System.out.println("Employé: " + emp.getNom());
+    System.out.println("Poste: " + emp.getPoste());
+    System.out.println("Salaire: " + emp.getSalaire());
+    System.out.println("Département: " + emp.getDept().getNom());
+    System.out.println("Code dept: " + emp.getDept().getCode());
+
+    // L'objet emp.dept a été automatiquement créé et populé !
+
+    return new ModelView("employee-created.jsp");
+}
+            </div>
+        </div>
+    </div>
+
+    <!-- Exemple 3: Combinaison avec Map -->
+    <div class="example-section">
+        <div class="form-container">
+            <h2>🗺️ Exemple 3: Combinaison objet + Map (pour données supplémentaires)</h2>
+
+            <div class="section-title">Formulaire HTML</div>
+            <form method="POST" action="/employees/advanced">
+                <div class="form-group">
+                    <label for="adv-emp-nom">Nom de l'employé:</label>
+                    <input type="text" id="adv-emp-nom" name="emp.nom" value="Marie Martin" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="adv-emp-poste">Poste:</label>
+                    <input type="text" id="adv-emp-poste" name="emp.poste" value="Chef de projet" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="adv-emp-salaire">Salaire:</label>
+                    <input type="number" id="adv-emp-salaire" name="emp.salaire" value="75000">
+                </div>
+
+                <div class="section-title">Données supplémentaires</div>
+                <div class="form-group">
+                    <label for="extra-info">Informations supplémentaires:</label>
+                    <textarea id="extra-info" name="extraInfo" rows="2">Employée expérimentée, excellente communication</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="priority">Priorité de traitement:</label>
+                    <select id="priority" name="priority">
+                        <option value="low">Basse</option>
+                        <option value="normal">Normale</option>
+                        <option value="high" selected>Élevée</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="sendEmail" value="true" checked>
+                        Envoyer un email de confirmation
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="comments">Commentaires:</label>
+                    <textarea id="comments" name="comments" rows="3">Recrutement urgent pour projet stratégique</textarea>
+                </div>
+
+                <button type="submit" class="submit-btn">🚀 Traitement avancé</button>
+            </form>
+
+            <div class="section-title">Méthode du contrôleur correspondante</div>
+            <div class="code-example">
+@POST("/employees/advanced")
+public ModelView processAdvanced(Employe emp, Map&lt;String, Object&gt; allData) {
+    // emp contient les données de l'employé (emp.nom, emp.poste, emp.salaire)
+    // allData contient TOUS les paramètres du formulaire
+
+    System.out.println("Employé: " + emp);
+    System.out.println("Toutes les données:");
+
+    String extraInfo = (String) allData.get("extraInfo");
+    String priority = (String) allData.get("priority");
+    Boolean sendEmail = (Boolean) allData.get("sendEmail");
+    String comments = (String) allData.get("comments");
+
+    // Vous avez accès à la fois à l'objet structuré ET à tous les paramètres !
+
+    return new ModelView("employee-advanced.jsp");
+}
+            </div>
+        </div>
+    </div>
+
+    <div class="note">
+        <strong>✨ Avantages de cette approche :</strong>
+        <ul>
+            <li><strong>Simplicité :</strong> Plus besoin d'extraire manuellement les paramètres de requête</li>
+            <li><strong>Type Safety :</strong> Objets Java typés au lieu de chaînes de caractères</li>
+            <li><strong>Objets imbriqués :</strong> Support automatique des relations complexes</li>
+            <li><strong>Flexibilité :</strong> Combinaison possible avec Map pour données supplémentaires</li>
+            <li><strong>Conversion automatique :</strong> String → int, boolean, double, etc.</li>
+        </ul>
+    </div>
+</body>
+</html>
+
