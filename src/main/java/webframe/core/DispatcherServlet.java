@@ -1,5 +1,6 @@
 package webframe.core;
 
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -42,15 +43,29 @@ import java.util.Map;
  * @see webframe.core.annotation.Controller
  * @see webframe.core.util.ParameterResolver
  */
+@MultipartConfig
 @WebServlet("/")
 public class DispatcherServlet extends HttpServlet {
 
     private ApplicationContext appContext;
+    private Map<Class<?>, Object> singletonControllers = new HashMap<>();
 
     @Override
     public void init() {
         // Initialiser le contexte de l'application
         appContext = ApplicationContext.getInstance();
+        
+        // Initialiser les Singletons par défaut (Sprint 10)
+        try {
+            List<Class<?>> controllers = AnnotationScanner.findControllerClasses();
+            for (Class<?> controllerClass : controllers) {
+                if (!controllerClass.isAnnotationPresent(webframe.core.annotation.Stateful.class)) {
+                    singletonControllers.put(controllerClass, controllerClass.getDeclaredConstructor().newInstance());
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -127,7 +142,29 @@ public class DispatcherServlet extends HttpServlet {
         Class<?> controllerClass = route.getController();
         if (method == null || controllerClass == null) return null;
 
-        Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
+        Object controllerInstance;
+        
+        if (controllerClass.isAnnotationPresent(webframe.core.annotation.Stateful.class)) {
+            // Approche 4 : Stateful -> instance conservée dans la session du navigateur
+            jakarta.servlet.http.HttpSession session = request.getSession();
+            String sessionKey = "controller_" + controllerClass.getName();
+            controllerInstance = session.getAttribute(sessionKey);
+            if (controllerInstance == null) {
+                controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
+                session.setAttribute(sessionKey, controllerInstance);
+            }
+        } else {
+            // Approche 3 : Singleton par défaut -> même instance pour tout le monde (attention concurrence)
+            controllerInstance = singletonControllers.get(controllerClass);
+            if (controllerInstance == null) { // Fallback de sécurité
+                controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
+                singletonControllers.put(controllerClass, controllerInstance);
+            }
+        }
+
+        // Approche 2 : Injection des champs (fichiers ou autres paramètres) en tant qu'attributs du contrôleur
+        injectAttributes(controllerInstance, request);
+
         method.setAccessible(true);
 
         // Extraire les paramètres d'URL depuis les données du ModelView
@@ -136,6 +173,57 @@ public class DispatcherServlet extends HttpServlet {
         // Résoudre les paramètres de la méthode à partir de la requête HTTP et des paramètres d'URL
         Object[] args = ParameterResolver.resolveParameters(method, request, urlParameters);
         return method.invoke(controllerInstance, args);
+    }
+
+    /**
+     * Injecte les paramètres HTTP et les fichiers (Part) dans les champs du contrôleur.
+     */
+    private void injectAttributes(Object controllerInstance, HttpServletRequest request) throws Exception {
+        Class<?> controllerClass = controllerInstance.getClass();
+        boolean isMultipart = request.getContentType() != null && request.getContentType().toLowerCase().startsWith("multipart/");
+        
+        for (java.lang.reflect.Field field : controllerClass.getDeclaredFields()) {
+            field.setAccessible(true);
+            String fieldName = field.getName();
+            Class<?> fieldType = field.getType();
+            
+            if (fieldType == webframe.core.tools.FileUpload.class && isMultipart) {
+                try {
+                    jakarta.servlet.http.Part part = request.getPart(fieldName);
+                    if (part != null && part.getSize() > 0) {
+                        String fileName = part.getSubmittedFileName();
+                        byte[] bytes = new byte[(int) part.getSize()];
+                        try (java.io.InputStream is = part.getInputStream()) {
+                            int read;
+                            int total = 0;
+                            while (total < bytes.length && (read = is.read(bytes, total, bytes.length - total)) != -1) {
+                                total += read;
+                            }
+                        }
+                        field.set(controllerInstance, new webframe.core.tools.FileUpload(fileName, bytes));
+                    } else if (!fieldType.isPrimitive()) {
+                        field.set(controllerInstance, null);
+                    }
+                } catch (Exception e) {
+                    // Ignorer si la partie n'existe pas
+                }
+            } else {
+                String paramValue = request.getParameter(fieldName);
+                if (paramValue != null) {
+                    if (fieldType == String.class) {
+                        field.set(controllerInstance, paramValue);
+                    } else if (fieldType == int.class || fieldType == Integer.class) {
+                        field.set(controllerInstance, Integer.parseInt(paramValue));
+                    } else if (fieldType == boolean.class || fieldType == Boolean.class) {
+                        field.set(controllerInstance, Boolean.parseBoolean(paramValue));
+                    } else if (fieldType == double.class || fieldType == Double.class) {
+                        field.set(controllerInstance, Double.parseDouble(paramValue));
+                    }
+                } else if (!fieldType.isPrimitive()) {
+                    field.set(controllerInstance, null);
+                }
+            }
+        }
     }
 
     /**
