@@ -27,6 +27,11 @@
       <version>5.0.0</version>
       <scope>provided</scope>
     </dependency>
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.10.1</version>
+    </dependency>
   </dependencies>
 
   <build>
@@ -37,9 +42,11 @@
         <version>3.11.0</version>
         <configuration>
           <release>8</release>
+          <compilerArgs>
+            <arg>-parameters</arg>
+          </compilerArgs>
         </configuration>
       </plugin>
     </plugins>
   </build>
-
 </project>

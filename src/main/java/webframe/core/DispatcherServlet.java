@@ -72,25 +72,44 @@ public class DispatcherServlet extends HttpServlet {
      */
     private void handleRequest(HttpServletRequest req, HttpServletResponse resp, String httpMethod) throws IOException {
         String requestPath = req.getRequestURI();
-        resp.setContentType("text/html;charset=UTF-8");
 
         try (PrintWriter out = resp.getWriter()) {
             ModelView matchingRoute = appContext.findRoute(requestPath, httpMethod);
 
             if (matchingRoute != null) {
                 try {
-                    // Exécuter la méthode du contrôleur et récupérer un ModelView mis à jour
-                    ModelView executed = executeRouteMethod(matchingRoute, req, httpMethod);
-                    resp.setStatus(HttpServletResponse.SC_OK);
-                    showView(executed, out, httpMethod);
+                    Method method = matchingRoute.getMethod(httpMethod);
+                    
+                    if (method != null && method.isAnnotationPresent(webframe.core.annotation.Json.class)) {
+                        // Cas Sprint 9 : API JSON
+                        Object result = executeMethodDirectly(matchingRoute, req, httpMethod);
+                        if (result instanceof ModelView) {
+                            resp.setContentType("text/html;charset=UTF-8");
+                            resp.setStatus(HttpServletResponse.SC_OK);
+                            showView((ModelView) result, out, httpMethod);
+                        } else {
+                            resp.setContentType("application/json;charset=UTF-8");
+                            resp.setStatus(HttpServletResponse.SC_OK);
+                            out.print(new com.google.gson.Gson().toJson(result));
+                        }
+                    } else {
+                        // Cas HTML classique
+                        resp.setContentType("text/html;charset=UTF-8");
+                        ModelView executed = executeRouteMethod(matchingRoute, req, httpMethod);
+                        resp.setStatus(HttpServletResponse.SC_OK);
+                        showView(executed, out, httpMethod);
+                    }
                 } catch (Exception e) {
+                    resp.setContentType("text/html;charset=UTF-8");
                     resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
                     showError(out, e.toString());
                 }
             } else if ("/".equals(requestPath)) {
+                resp.setContentType("text/html;charset=UTF-8");
                 resp.setStatus(HttpServletResponse.SC_OK);
                 showDemoPage(out);
             } else {
+                resp.setContentType("text/html;charset=UTF-8");
                 resp.setStatus(HttpServletResponse.SC_NOT_FOUND);
                 show404Page(requestPath, out);
             }
@@ -99,18 +118,14 @@ public class DispatcherServlet extends HttpServlet {
 
 
     /**
-     * Exécute la méthode du contrôleur et met à jour le ModelView retourné.
-     *
-     * @param route la route à exécuter
-     * @param request la requête HTTP
-     * @param httpMethod le verbe HTTP (GET, POST, etc.)
+     * Exécute directement la méthode du contrôleur et retourne le résultat brut.
      */
-    private ModelView executeRouteMethod(ModelView route, HttpServletRequest request, String httpMethod) throws Exception {
-        if (route == null) return route;
+    private Object executeMethodDirectly(ModelView route, HttpServletRequest request, String httpMethod) throws Exception {
+        if (route == null) return null;
 
         Method method = route.getMethod(httpMethod);
         Class<?> controllerClass = route.getController();
-        if (method == null || controllerClass == null) return route;
+        if (method == null || controllerClass == null) return null;
 
         Object controllerInstance = controllerClass.getDeclaredConstructor().newInstance();
         method.setAccessible(true);
@@ -120,7 +135,18 @@ public class DispatcherServlet extends HttpServlet {
 
         // Résoudre les paramètres de la méthode à partir de la requête HTTP et des paramètres d'URL
         Object[] args = ParameterResolver.resolveParameters(method, request, urlParameters);
-        Object result = method.invoke(controllerInstance, args);
+        return method.invoke(controllerInstance, args);
+    }
+
+    /**
+     * Exécute la méthode du contrôleur et met à jour le ModelView retourné.
+     *
+     * @param route la route à exécuter
+     * @param request la requête HTTP
+     * @param httpMethod le verbe HTTP (GET, POST, etc.)
+     */
+    private ModelView executeRouteMethod(ModelView route, HttpServletRequest request, String httpMethod) throws Exception {
+        Object result = executeMethodDirectly(route, request, httpMethod);
 
         if (result == null) {
             return route;
