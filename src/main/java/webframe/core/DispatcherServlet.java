@@ -50,8 +50,18 @@ public class DispatcherServlet extends HttpServlet {
     private ApplicationContext appContext;
     private Map<Class<?>, Object> singletonControllers = new HashMap<>();
 
+    private String authName;
+    private String roleName;
+
     @Override
     public void init() {
+        // Lecture des noms de variables de session depuis le web.xml (Sprint 11-BIS)
+        authName = getServletConfig().getInitParameter("authName");
+        if (authName == null || authName.trim().isEmpty()) authName = "connected";
+
+        roleName = getServletConfig().getInitParameter("roleName");
+        if (roleName == null || roleName.trim().isEmpty()) roleName = "role";
+
         // Initialiser le contexte de l'application
         appContext = ApplicationContext.getInstance();
         
@@ -94,7 +104,46 @@ public class DispatcherServlet extends HttpServlet {
             if (matchingRoute != null) {
                 try {
                     Method method = matchingRoute.getMethod(httpMethod);
+                    Class<?> controllerClass = matchingRoute.getController();
+
+                    // --- SPRINT 11-BIS : Vérification des Autorisations et Rôles ---
+                    boolean isClassAuth = controllerClass != null && controllerClass.isAnnotationPresent(webframe.core.annotation.Authorized.class);
+                    boolean isMethodAuth = method != null && method.isAnnotationPresent(webframe.core.annotation.Authorized.class);
                     
+                    if (isClassAuth || isMethodAuth) {
+                        jakarta.servlet.http.HttpSession session = req.getSession();
+                        Object isConnected = session.getAttribute(authName);
+                        
+                        if (isConnected == null || Boolean.FALSE.equals(isConnected) || "false".equalsIgnoreCase(isConnected.toString())) {
+                            resp.setContentType("text/html;charset=UTF-8");
+                            resp.setStatus(HttpServletResponse.SC_FORBIDDEN); // 403
+                            out.println("<h1>403 Forbidden</h1><p>Vous devez être connecté pour accéder à cette ressource.</p>");
+                            return;
+                        }
+
+                        // Vérification du rôle
+                        webframe.core.annotation.Role classRole = controllerClass != null ? controllerClass.getAnnotation(webframe.core.annotation.Role.class) : null;
+                        webframe.core.annotation.Role methodRole = method != null ? method.getAnnotation(webframe.core.annotation.Role.class) : null;
+                        
+                        String requiredRole = null;
+                        if (methodRole != null) {
+                            requiredRole = methodRole.value();
+                        } else if (classRole != null) {
+                            requiredRole = classRole.value();
+                        }
+
+                        if (requiredRole != null) {
+                            Object userRole = session.getAttribute(roleName);
+                            if (userRole == null || !requiredRole.equals(userRole.toString())) {
+                                resp.setContentType("text/html;charset=UTF-8");
+                                resp.setStatus(HttpServletResponse.SC_FORBIDDEN); // 403
+                                out.println("<h1>403 Forbidden</h1><p>Privilèges insuffisants. Rôle requis : <strong>" + requiredRole + "</strong></p>");
+                                return;
+                            }
+                        }
+                    }
+                    // --- Fin vérification ---
+
                     if (method != null && method.isAnnotationPresent(webframe.core.annotation.Json.class)) {
                         // Cas Sprint 9 : API JSON
                         Object result = executeMethodDirectly(matchingRoute, req, httpMethod);
