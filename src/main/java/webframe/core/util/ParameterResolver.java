@@ -132,6 +132,16 @@ public class ParameterResolver {
             Parameter param = parameters[i];
             Class<?> paramType = param.getType();
 
+            // Sprint 11 : Injection de la Session HTTP via @Session
+            if (param.isAnnotationPresent(webframe.core.annotation.Session.class)) {
+                if (Map.class.isAssignableFrom(paramType)) {
+                    args[i] = new webframe.core.tools.SessionMap(request.getSession());
+                    continue;
+                } else {
+                    throw new IllegalArgumentException("Le paramètre annoté avec @Session doit être de type Map (ex: Map<String, Object>)");
+                }
+            }
+
             // Vérifier si le paramètre est une Map<String, Object> pour capturer tous les paramètres
             if (isMapStringObject(param)) {
                 if (allFormParameters == null) {
